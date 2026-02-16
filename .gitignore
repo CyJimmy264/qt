@@ -1,0 +1,18 @@
+.bundle/
+vendor/bundle/
+
+# Build artifacts
+*.o
+*.so
+*.bundle
+*.dll
+*.dylib
+
+# Extension build directories
+ext/**/Makefile
+ext/**/mkmf.log
+ext/**/.sitearchdir.time
+ext/**/.sitelibdir.time
+
+# rake-compiler output
+tmp/
