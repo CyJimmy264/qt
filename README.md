@@ -193,6 +193,7 @@ Everything generated/build-related is under `build/` and should stay out of git.
 ```bash
 bundle exec rake test
 bundle exec rake compile
+bundle exec rake rubocop
 ```
 
 If Qt is in a custom prefix:

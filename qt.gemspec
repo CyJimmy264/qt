@@ -28,4 +28,5 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'ffi', '~> 1.17'
   spec.add_development_dependency 'rake', '~> 13.0'
   spec.add_development_dependency 'minitest', '~> 5.20'
+  spec.add_development_dependency 'rubocop', '~> 1.76'
 end

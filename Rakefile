@@ -3,6 +3,7 @@
 require 'rake/clean'
 require 'rake/testtask'
 require 'rubygems'
+require 'rubocop/rake_task'
 
 CLEAN.include(
   '**/*.o',
@@ -57,5 +58,7 @@ desc 'Install gem locally (build + gem install --local)'
 task install: :build_gem do
   sh "gem install --local --force #{PKG_FILE}"
 end
+
+RuboCop::RakeTask.new(:rubocop)
 
 task default: :test

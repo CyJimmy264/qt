@@ -1,0 +1,17 @@
+inherit_from: .rubocop_todo.yml
+
+# frozen_string_literal: true
+
+AllCops:
+  NewCops: enable
+  SuggestExtensions: true
+  TargetRubyVersion: 3.4
+  CacheRootDirectory: tmp/rubocop_cache
+  Exclude:
+    - 'vendor/**/*'
+    - 'build/**/*'
+    - 'ext/qt_ruby_bridge/qt_ruby_bridge.so'
+    - 'tmp/**/*'
+
+Layout/LineLength:
+  Max: 120
