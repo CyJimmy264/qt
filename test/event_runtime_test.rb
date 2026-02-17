@@ -45,4 +45,17 @@ class QtEventRuntimeTest < Minitest::Test
   ensure
     app&.dispose
   end
+
+  def test_signal_resolution_requires_valid_signature
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    app = QApplication.new(0, [])
+    button = QPushButton.new
+
+    assert_equal button, button.connect('clicked(bool)') { |_payload| nil }
+    assert_equal button, button.disconnect('clicked(bool)')
+    assert_raises(ArgumentError) { button.connect('clicked(QString)') { |_payload| nil } }
+  ensure
+    app&.dispose
+  end
 end
