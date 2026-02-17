@@ -3,6 +3,7 @@
 
 require 'fileutils'
 require 'json'
+require 'set'
 require 'tempfile'
 require_relative 'specs/qt_widgets'
 
@@ -145,6 +146,165 @@ def collect_class_api(ast, class_name)
   end
 
   { methods: methods.uniq, constructors: ctors.uniq }
+end
+
+def collect_method_decls(ast, class_name, method_name)
+  decls = []
+
+  walk_ast(ast) do |node|
+    next unless node['kind'] == 'CXXRecordDecl'
+    next unless node['name'] == class_name
+
+    Array(node['inner']).each do |inner|
+      next unless inner['kind'] == 'CXXMethodDecl'
+      next unless inner['name'] == method_name
+
+      decls << inner
+    end
+  end
+
+  decls
+end
+
+def map_cpp_arg_type(type_name)
+  type = type_name.to_s.strip
+  type = type.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
+
+  if type == 'QString'
+    return { ffi: :string, cast: :qstring }
+  end
+
+  if type.end_with?('*')
+    base = type.sub(/\s*\*\z/, '').strip
+    return { ffi: :pointer, cast: "#{base}*" }
+  end
+
+  case type
+  when 'int'
+    { ffi: :int }
+  when 'bool'
+    { ffi: :int, cast: 'bool' }
+  else
+    return { ffi: :int, cast: type } if type.include?('::')
+
+    nil
+  end
+end
+
+def normalized_cpp_type_name(type_name)
+  type = type_name.to_s.strip
+  type = type.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
+  type = type.sub(/\s*\*\z/, '*') if type.end_with?('*')
+  type
+end
+
+def map_cpp_return_type(type_name)
+  type = type_name.to_s.strip
+  type = type.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
+
+  return { ffi_return: :void } if type == 'void'
+  return { ffi_return: :int } if type == 'int'
+  return { ffi_return: :int } if type == 'bool'
+  return { ffi_return: :string, return_cast: :qstring_to_utf8 } if type == 'QString'
+  return { ffi_return: :pointer } if type.end_with?('*')
+
+  nil
+end
+
+def parse_method_signature(method_decl)
+  qual = method_decl.dig('type', 'qualType').to_s
+  md = qual.match(/\A(.+?)\s*\((.*)\)/)
+  return nil unless md
+
+  ret = md[1].strip
+  params = Array(method_decl['inner']).select { |x| x['kind'] == 'ParmVarDecl' }
+  {
+    return_type: ret,
+    params: params.each_with_index.map do |param, idx|
+      { name: (param['name'] || "arg#{idx + 1}"), type: param.dig('type', 'qualType').to_s }
+    end
+  }
+end
+
+def build_auto_method_from_decl(method_decl, entry)
+  parsed = parse_method_signature(method_decl)
+  return nil unless parsed
+
+  ret_info = map_cpp_return_type(parsed[:return_type])
+  return nil unless ret_info
+
+  args = parsed[:params].map do |param|
+    arg_info = map_cpp_arg_type(param[:type])
+    return nil unless arg_info
+
+    arg_hash = { name: param[:name], ffi: arg_info[:ffi] }
+    arg_hash[:cast] = arg_info[:cast] if arg_info[:cast]
+    arg_hash
+  end
+
+  method = {
+    qt_name: entry[:qt_name],
+    ruby_name: entry[:ruby_name] || entry[:qt_name],
+    ffi_return: ret_info[:ffi_return],
+    args: args
+  }
+  method[:return_cast] = ret_info[:return_cast] if ret_info[:return_cast]
+  method
+end
+
+def resolve_auto_method(ast, qt_class, auto_entry)
+  entry = auto_entry.is_a?(String) ? { qt_name: auto_entry } : auto_entry.dup
+  qt_name = entry.fetch(:qt_name)
+  decls = collect_method_decls(ast, qt_class, qt_name)
+  return nil if decls.empty?
+
+  built = decls.filter_map do |decl|
+    parsed = parse_method_signature(decl)
+    next unless parsed
+
+    method = build_auto_method_from_decl(decl, entry)
+    next unless method
+
+    {
+      method: method,
+      param_types: parsed[:params].map { |param| normalized_cpp_type_name(param[:type]) }
+    }
+  end
+  return nil if built.empty?
+
+  if entry[:param_count]
+    built.select! { |candidate| candidate[:method][:args].length == entry[:param_count] }
+    return nil if built.empty?
+  end
+
+  if entry[:param_types]
+    expected = entry[:param_types].map { |t| normalized_cpp_type_name(t) }
+    built.select! { |candidate| candidate[:param_types] == expected }
+    return nil if built.empty?
+  end
+
+  built.min_by { |candidate| candidate[:method][:args].length }[:method]
+end
+
+def expand_auto_methods(specs, ast)
+  specs.map do |spec|
+    auto_entries = Array(spec[:auto_methods])
+    manual_methods = Array(spec[:methods])
+    next spec if auto_entries.empty?
+
+    existing_names = manual_methods.map { |m| m[:qt_name] }.to_set
+    auto_methods = auto_entries.filter_map do |entry|
+      qt_name = entry.is_a?(String) ? entry : entry[:qt_name]
+      next if existing_names.include?(qt_name)
+
+      resolved = resolve_auto_method(ast, spec[:qt_class], entry)
+      raise "Failed to auto-resolve #{spec[:qt_class]}##{qt_name}" unless resolved
+
+      resolved
+    end
+
+    spec.merge(methods: manual_methods + auto_methods)
+  end
 end
 
 def normalize_cpp_type_name(raw)
@@ -721,7 +881,8 @@ end
 
 ast = ast_dump
 validate_qt_api!(ast, CLASS_SPECS)
-effective_specs = enrich_specs_with_properties(CLASS_SPECS, ast)
+expanded_specs = expand_auto_methods(CLASS_SPECS, ast)
+effective_specs = enrich_specs_with_properties(expanded_specs, ast)
 super_qt_by_qt, wrapper_qt_classes = build_generated_inheritance(ast, effective_specs)
 
 FileUtils.mkdir_p(File.dirname(CPP_PATH))

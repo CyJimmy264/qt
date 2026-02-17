@@ -181,27 +181,6 @@ module QtRubyGenerator
           { qt_name: 'setRowHeight', ruby_name: 'setRowHeight', ffi_return: :void, args: [{ name: 'row', ffi: :int }, { name: 'height', ffi: :int }] },
           { qt_name: 'setVerticalScrollMode', ruby_name: 'setVerticalScrollMode', ffi_return: :void, args: [{ name: 'mode', ffi: :int, cast: 'QAbstractItemView::ScrollMode' }] },
           { qt_name: 'setHorizontalScrollBarPolicy', ruby_name: 'setHorizontalScrollBarPolicy', ffi_return: :void, args: [{ name: 'policy', ffi: :int, cast: 'Qt::ScrollBarPolicy' }] },
-          {
-            qt_name: 'setHorizontalHeaderItem',
-            ruby_name: 'setHorizontalHeaderItem',
-            ffi_return: :void,
-            args: [{ name: 'column', ffi: :int }, { name: 'item', ffi: :pointer, cast: 'QTableWidgetItem*' }]
-          },
-          {
-            qt_name: 'setItem',
-            ruby_name: 'setItem',
-            ffi_return: :void,
-            args: [{ name: 'row', ffi: :int }, { name: 'column', ffi: :int }, { name: 'item', ffi: :pointer, cast: 'QTableWidgetItem*' }]
-          },
-          {
-            qt_name: 'item',
-            ruby_name: 'item',
-            ffi_return: :pointer,
-            args: [{ name: 'row', ffi: :int }, { name: 'column', ffi: :int }]
-          },
-          { qt_name: 'setCurrentCell', ruby_name: 'setCurrentCell', ffi_return: :void, args: [{ name: 'row', ffi: :int }, { name: 'column', ffi: :int }] },
-          { qt_name: 'currentRow', ruby_name: 'currentRow', ffi_return: :int, args: [] },
-          { qt_name: 'currentColumn', ruby_name: 'currentColumn', ffi_return: :int, args: [] },
           { qt_name: 'clearContents', ruby_name: 'clearContents', ffi_return: :void, args: [] },
           {
             qt_name: 'setCellWidget',
@@ -214,6 +193,14 @@ module QtRubyGenerator
             ]
           }
         ],
+        auto_methods: [
+          { qt_name: 'setHorizontalHeaderItem', param_count: 2 },
+          { qt_name: 'setItem', param_count: 3 },
+          { qt_name: 'item', param_count: 2 },
+          { qt_name: 'setCurrentCell', param_count: 2 },
+          { qt_name: 'currentRow', param_count: 0 },
+          { qt_name: 'currentColumn', param_count: 0 }
+        ],
         validate: { constructors: ['QTableWidget'], methods: [] }
       },
       {
@@ -222,20 +209,11 @@ module QtRubyGenerator
         include: 'QTableWidgetItem',
         prefix: 'qtable_widget_item',
         constructor: { parent: false },
-        methods: [
-          {
-            qt_name: 'setText',
-            ruby_name: 'setText',
-            ffi_return: :void,
-            args: [{ name: 'text', ffi: :string, cast: :qstring }]
-          },
-          { qt_name: 'text', ruby_name: 'text', ffi_return: :string, args: [], return_cast: :qstring_to_utf8 },
-          {
-            qt_name: 'setTextAlignment',
-            ruby_name: 'setTextAlignment',
-            ffi_return: :void,
-            args: [{ name: 'alignment', ffi: :int, cast: :alignment }]
-          }
+        methods: [],
+        auto_methods: [
+          { qt_name: 'setText', param_count: 1 },
+          { qt_name: 'text', param_count: 0 },
+          { qt_name: 'setTextAlignment', param_count: 1, param_types: ['Qt::Alignment'] }
         ],
         validate: { constructors: ['QTableWidgetItem'], methods: [] }
       },
