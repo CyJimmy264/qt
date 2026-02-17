@@ -12,7 +12,10 @@ module QtRubyGenerator
         class_methods: [
           { ruby_name: 'qtVersion', native: 'qt_version', args: [] },
           { ruby_name: 'processEvents', native: 'qapplication_process_events', args: [] },
-          { ruby_name: 'topLevelWidgetsCount', native: 'qapplication_top_level_widgets_count', args: [] }
+          { ruby_name: 'topLevelWidgetsCount', native: 'qapplication_top_level_widgets_count', args: [] },
+          { ruby_name: 'mouseX', native: 'qapplication_mouse_x', args: [] },
+          { ruby_name: 'mouseY', native: 'qapplication_mouse_y', args: [] },
+          { ruby_name: 'mouseButtons', native: 'qapplication_mouse_buttons', args: [] }
         ],
         methods: [
           { qt_name: 'exec', ruby_name: 'exec', ffi_return: :int, args: [] }
@@ -47,10 +50,24 @@ module QtRubyGenerator
             ffi_return: :void,
             args: [{ name: 'layout', ffi: :pointer, cast: 'QLayout*' }]
           },
+          {
+            qt_name: 'setGeometry',
+            ruby_name: 'setGeometry',
+            ffi_return: :void,
+            args: [
+              { name: 'x', ffi: :int },
+              { name: 'y', ffi: :int },
+              { name: 'width', ffi: :int },
+              { name: 'height', ffi: :int }
+            ]
+          },
           { qt_name: 'show', ruby_name: 'show', ffi_return: :void, args: [] },
-          { qt_name: 'hide', ruby_name: 'hide', ffi_return: :void, args: [] }
+          { qt_name: 'hide', ruby_name: 'hide', ffi_return: :void, args: [] },
+          { qt_name: 'isVisible', ruby_name: 'isVisible', ffi_return: :int, args: [] },
+          { qt_name: 'x', ruby_name: 'x', ffi_return: :int, args: [] },
+          { qt_name: 'y', ruby_name: 'y', ffi_return: :int, args: [] }
         ],
-        validate: { constructors: ['QWidget'], methods: ['setWindowTitle', 'resize', 'setLayout', 'show', 'hide'] }
+        validate: { constructors: ['QWidget'], methods: ['setWindowTitle', 'resize', 'setLayout', 'setGeometry', 'show', 'hide', 'isVisible', 'x', 'y'] }
       },
       {
         qt_class: 'QLabel',
@@ -81,6 +98,12 @@ module QtRubyGenerator
               { name: 'width', ffi: :int },
               { name: 'height', ffi: :int }
             ]
+          },
+          {
+            qt_name: 'setStyleSheet',
+            ruby_name: 'setStyleSheet',
+            ffi_return: :void,
+            args: [{ name: 'style', ffi: :string, cast: :qstring }]
           },
           { qt_name: 'hide', ruby_name: 'hide', ffi_return: :void, args: [] }
         ],

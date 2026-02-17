@@ -86,7 +86,7 @@ while running
   end
 
   QApplication.process_events
-  running = false if QApplication.top_level_widgets_count.zero?
+  running = false if window.is_visible.zero?
   sleep(0.01)
 end
 

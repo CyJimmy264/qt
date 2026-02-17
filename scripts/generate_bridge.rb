@@ -69,7 +69,12 @@ def free_functions
   [
     { name: 'qt_ruby_qt_version', ffi_return: :string, args: [] },
     { name: 'qt_ruby_qapplication_process_events', ffi_return: :void, args: [] },
-    { name: 'qt_ruby_qapplication_top_level_widgets_count', ffi_return: :int, args: [] }
+    { name: 'qt_ruby_qapplication_top_level_widgets_count', ffi_return: :int, args: [] },
+    { name: 'qt_ruby_qapplication_mouse_x', ffi_return: :int, args: [] },
+    { name: 'qt_ruby_qapplication_mouse_y', ffi_return: :int, args: [] },
+    { name: 'qt_ruby_qapplication_mouse_buttons', ffi_return: :int, args: [] },
+    { name: 'qt_ruby_qwidget_map_from_global_x', ffi_return: :int, args: [:pointer, :int, :int] },
+    { name: 'qt_ruby_qwidget_map_from_global_y', ffi_return: :int, args: [:pointer, :int, :int] }
   ]
 end
 
@@ -277,7 +282,10 @@ def generate_cpp_bridge(specs)
   lines = []
   required_includes.each { |inc| lines << "#include <#{inc}>" }
   lines << '#include <QCoreApplication>'
+  lines << '#include <QCursor>'
+  lines << '#include <QGuiApplication>'
   lines << '#include <QByteArray>'
+  lines << '#include <QPoint>'
   lines << '#include <QString>'
   lines << ''
   lines << 'namespace {'
@@ -300,6 +308,36 @@ def generate_cpp_bridge(specs)
   lines << ''
   lines << 'extern "C" int qt_ruby_qapplication_top_level_widgets_count() {'
   lines << '  return QApplication::topLevelWidgets().size();'
+  lines << '}'
+  lines << ''
+  lines << 'extern "C" int qt_ruby_qapplication_mouse_x() {'
+  lines << '  return QCursor::pos().x();'
+  lines << '}'
+  lines << ''
+  lines << 'extern "C" int qt_ruby_qapplication_mouse_y() {'
+  lines << '  return QCursor::pos().y();'
+  lines << '}'
+  lines << ''
+  lines << 'extern "C" int qt_ruby_qapplication_mouse_buttons() {'
+  lines << '  return static_cast<int>(QGuiApplication::mouseButtons());'
+  lines << '}'
+  lines << ''
+  lines << 'extern "C" int qt_ruby_qwidget_map_from_global_x(void* handle, int gx, int gy) {'
+  lines << '  if (!handle) {'
+  lines << '    return 0;'
+  lines << '  }'
+  lines << ''
+  lines << '  auto* widget = static_cast<QWidget*>(handle);'
+  lines << '  return widget->mapFromGlobal(QPoint(gx, gy)).x();'
+  lines << '}'
+  lines << ''
+  lines << 'extern "C" int qt_ruby_qwidget_map_from_global_y(void* handle, int gx, int gy) {'
+  lines << '  if (!handle) {'
+  lines << '    return 0;'
+  lines << '  }'
+  lines << ''
+  lines << '  auto* widget = static_cast<QWidget*>(handle);'
+  lines << '  return widget->mapFromGlobal(QPoint(gx, gy)).y();'
   lines << '}'
   lines << ''
 
