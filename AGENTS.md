@@ -6,6 +6,8 @@
 - Application logic belongs in Ruby app code (examples or user apps), not in bridge.
 - Do not reimplement Qt behavior inside core bridge/native (no custom click systems, no synthetic event dispatch in `lib/qt/native.rb`).
 - No framework-level polling/hit-test event emulation in core. If polling is needed, it is app/example-level temporary logic only.
+- Do not pseudo-generate non-Qt-derived runtime logic (e.g., large handcrafted Ruby modules emitted as string templates).
+- If logic cannot be directly generated from Qt headers/metaobject data, keep it as regular Ruby source files in the repository (source-of-truth), not in generated artifacts.
 
 ## Architecture
 - Project is a Ruby-to-Qt bridge (`qt` gem name).

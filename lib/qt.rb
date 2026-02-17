@@ -18,6 +18,7 @@ require_relative 'qt/errors'
 require_relative 'qt/constants'
 require_relative 'qt/bridge'
 require_relative 'qt/native'
+require_relative 'qt/event_runtime'
 require GENERATED_WIDGETS
 
 module Qt
