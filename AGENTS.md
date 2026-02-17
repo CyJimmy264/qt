@@ -1,0 +1,52 @@
+# Qt Ruby Project Notes
+
+## Core Policy
+- Do not hand-write new C/C++ bridge functions for app-level behavior.
+- Bridge/native layer should be generated from Qt headers/API only.
+- Application logic belongs in Ruby app code (examples or user apps), not in bridge.
+- Do not reimplement Qt behavior inside core bridge/native (no custom click systems, no synthetic event dispatch in `lib/qt/native.rb`).
+- No framework-level polling/hit-test event emulation in core. If polling is needed, it is app/example-level temporary logic only.
+
+## Architecture
+- Project is a Ruby-to-Qt bridge (`qt` gem name).
+- Generated artifacts live under `build/` and are not source-of-truth.
+- Source-of-truth:
+  - `scripts/specs/qt_widgets.rb` (class/method spec)
+  - `scripts/generate_bridge.rb` (generator)
+- `lib/qt/native.rb` must remain a thin FFI wrapper over generated bridge API.
+- Build flow:
+  - `ruby scripts/generate_bridge.rb`
+  - `bundle exec rake compile`
+
+## Inheritance Model
+- Ruby classes are generated with Qt-based inheritance derived from AST.
+- Intermediate Qt classes may be generated as thin Ruby wrappers (no native methods), e.g.:
+  - `QLabel < QFrame < QWidget`
+  - `QPushButton < QAbstractButton < QWidget`
+  - `QTableWidget < QTableView < QAbstractItemView ...`
+- Duplicated QWidget methods should not be repeated in child specs.
+
+## Events / Signals / Slots Policy
+- Current target is Qt-native event architecture, not custom bridge callbacks.
+- Do not add hand-written bridge callbacks like `set_click_callback/watch_widget_click`.
+- Do not generate helper methods like `on_click` unless backed by Qt-native event/metaobject model.
+- Preferred roadmap:
+  - Generate QObject event primitives from Qt API/types.
+  - Add signals/slots support based on Qt metaobject system.
+  - Rewrite examples to use that model.
+
+## Example App Guidance
+- `examples/timetrap_clockify.rb` should keep scroll/state behavior in Ruby.
+- Avoid recreating `QScrollArea` content widget on each render when preserving scroll UX.
+- Prefer updating/reusing existing container and child widgets.
+
+## Current UX Expectations (timetrap_clockify)
+- Sidebar project filter.
+- Week/day grouped blocks.
+- Expand/collapse project rows.
+- Stable scrolling (no jump to top on row click).
+- Styled modern scrollbar via QSS.
+
+## Debugging
+- Use `TIMETRAP_UI_DEBUG=1` for verbose Ruby-side logs.
+- Keep logs useful but avoid adding permanent bridge APIs only for debugging.

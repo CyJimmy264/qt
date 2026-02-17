@@ -6,10 +6,11 @@ require 'json'
 require 'open3'
 require 'time'
 require 'qt'
+
 begin
   require 'timetrap'
 rescue LoadError
-  # CLI fallback is used when timetrap gem is unavailable.
+  # CLI fallback when gem is not available.
 end
 
 WINDOW_W = 1380
@@ -23,6 +24,8 @@ PROJECT_SLOT_COUNT = 14
 
 TIMETRAP_BIN = ENV.fetch('TIMETRAP_BIN', 't')
 TIMETRAP_API = defined?(Timetrap::Entry) && defined?(Timetrap::Timer)
+DEBUG_UI = ENV['TIMETRAP_UI_DEBUG'] == '1'
+AUTO_REFRESH_SEC = (Integer(ENV.fetch('TIMETRAP_UI_AUTO_REFRESH_SEC', '30')) rescue 30)
 
 BG_APP = 'background-color: #eef2f5; border: 1px solid #d6dde5;'
 BG_SIDEBAR = 'background-color: #f7f9fb; border-right: 1px solid #d9e0e7;'
@@ -34,17 +37,44 @@ SIDE_ITEM = 'background-color: #f7f9fb; border: 0px; color: #334155; font-size: 
 SIDE_ACTIVE = 'background-color: #eaf3ff; border: 1px solid #bfdbfe; color: #0f172a; font-size: 14px; font-weight: 800;'
 PROJ_ITEM = 'background-color: #f7f9fb; border: 1px solid #e2e8f0; color: #334155; font-size: 12px; font-weight: 700;'
 PROJ_ACTIVE = 'background-color: #dbeafe; border: 2px solid #60a5fa; color: #0f172a; font-size: 12px; font-weight: 800;'
-INPUT_LIKE = 'background-color: #ffffff; border: 1px solid #cfd8e3; color: #111827; font-size: 14px;'
+INPUT_LIKE = 'background-color: #ffffff; border: 1px solid #cfd8e3; color: #111827; font-size: 14px; padding-left: 8px;'
 BTN_PRIMARY = 'background-color: #0ea5e9; border: 1px solid #0284c7; color: #ffffff; font-size: 14px; font-weight: 800;'
 BTN_DANGER = 'background-color: #ef4444; border: 1px solid #dc2626; color: #ffffff; font-size: 14px; font-weight: 800;'
 BTN_GHOST = 'background-color: #ffffff; border: 1px solid #cfd8e3; color: #0f172a; font-size: 13px; font-weight: 700;'
 BTN_ACTIVE = 'background-color: #dbeafe; border: 2px solid #3b82f6; color: #0f172a; font-size: 13px; font-weight: 800;'
-TABLE_WRAP = 'background-color: #f3f6fa; border: 1px solid #d9e0e7;'
-TABLE_STYLE = 'background-color: #ffffff; border: 1px solid #d9e0e7; color: #111827; font-size: 13px;'
-CELL_HEAD = 'background-color: #edf2f7; border: 1px solid #dbe3eb; color: #475569; font-size: 12px; font-weight: 700;'
-CELL_TEXT = 'background-color: #ffffff; border: 1px solid #e2e8f0; color: #111827; font-size: 13px;'
-CELL_DUR = 'background-color: #ffffff; border: 1px solid #e2e8f0; color: #0f172a; font-size: 13px; font-weight: 800;'
-CELL_GROUP = 'background-color: #eaf3ff; border: 1px solid #bfdbfe; color: #1e3a8a; font-size: 13px; font-weight: 800;'
+AREA_STYLE = <<~QSS.tr("\n", ' ')
+  QScrollArea {
+    background-color: #f3f6fa;
+    border: 1px solid #d9e0e7;
+  }
+  QScrollBar:vertical {
+    background: #eef2f6;
+    width: 12px;
+    margin: 2px;
+    border: 1px solid #d5dde7;
+    border-radius: 6px;
+  }
+  QScrollBar::handle:vertical {
+    background: #9aa8b8;
+    min-height: 28px;
+    border-radius: 5px;
+  }
+  QScrollBar::handle:vertical:hover {
+    background: #7f90a3;
+  }
+  QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+    background: transparent;
+    border: none;
+  }
+  QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: transparent;
+  }
+QSS
+WEEK_STYLE = 'background-color: #dce3ea; border: 1px solid #c8d1db; color: #111827; font-size: 16px; font-weight: 800; padding-left: 12px;'
+DAY_STYLE = 'background-color: #ecf1f6; border: 1px solid #d5dee8; color: #5b6776; font-size: 13px; font-weight: 700; padding-left: 12px;'
+PROJECT_ROW = 'background-color: #ffffff; border: 1px solid #d8e0ea; color: #0f172a; font-size: 14px; font-weight: 700; padding-left: 12px; text-align: left;'
+DETAIL_ROW = 'background-color: #f9fbfd; border: 1px solid #e3e8ef; color: #334155; font-size: 12px; padding-left: 24px;'
 
 app = QApplication.new(0, [])
 window = QWidget.new do |w|
@@ -90,9 +120,8 @@ project_title.set_text('PROJECTS')
 
 project_slots = Array.new(PROJECT_SLOT_COUNT) do |i|
   y = 316 + i * 34
-  view = QLabel.new(window)
+  view = QPushButton.new(window)
   view.set_geometry(12, y, SIDEBAR_W - 24, 30)
-  view.set_alignment(Qt::AlignCenter)
   view.set_style_sheet(PROJ_ITEM)
   view.set_text('')
   { view: view, x: 12, y: y, w: SIDEBAR_W - 24, h: 30, project: nil }
@@ -127,7 +156,7 @@ project_pill = QLabel.new(window)
 project_pill.set_geometry(CONTENT_X + CONTENT_W - 440, TOPBAR_H + 35, 150, 48)
 project_pill.set_alignment(Qt::AlignCenter)
 project_pill.set_style_sheet(BTN_GHOST)
-project_pill.set_text('Project filter: ALL')
+project_pill.set_text('Project: ALL')
 
 live_timer = QLabel.new(window)
 live_timer.set_geometry(CONTENT_X + CONTENT_W - 280, TOPBAR_H + 35, 120, 48)
@@ -153,24 +182,12 @@ summary.set_text('Week total: 00:00:00 | Total: 00:00:00')
 
 scroll = QScrollArea.new(window)
 scroll.set_geometry(CONTENT_X, TOPBAR_H + 156, CONTENT_W, WINDOW_H - (TOPBAR_H + 170))
-scroll.set_widget_resizable(1)
-scroll.set_style_sheet(TABLE_WRAP)
+scroll.set_widget_resizable(0)
+scroll.set_style_sheet(AREA_STYLE)
 
 scroll_host = QWidget.new(window)
-scroll_host.set_geometry(0, 0, CONTENT_W - 20, WINDOW_H - (TOPBAR_H + 180))
-scroll_host.set_style_sheet(TABLE_WRAP)
-
-entries_table = QTableWidget.new(scroll_host)
-entries_table.set_geometry(8, 8, CONTENT_W - 40, WINDOW_H - (TOPBAR_H + 196))
-entries_table.set_style_sheet(TABLE_STYLE)
-entries_table.set_column_count(6)
-entries_table.set_column_width(0, 180)
-entries_table.set_column_width(1, 230)
-entries_table.set_column_width(2, 230)
-entries_table.set_column_width(3, 300)
-entries_table.set_column_width(4, 180)
-entries_table.set_column_width(5, 120)
-
+scroll_host.set_geometry(0, 0, CONTENT_W - 20, 1200)
+scroll_host.set_style_sheet('background-color: #f3f6fa; border: 0px;')
 scroll.set_widget(scroll_host)
 
 refresh_btn = QPushButton.new(window)
@@ -178,15 +195,15 @@ refresh_btn.set_geometry(CONTENT_X + CONTENT_W - 124, TOPBAR_H + 112, 110, 34)
 refresh_btn.set_style_sheet(BTN_GHOST)
 refresh_btn.set_text('REFRESH')
 
-clickables = [
-  { key: :start, view: start_btn, x: CONTENT_X + CONTENT_W - 152, y: TOPBAR_H + 35, w: 64, h: 48 },
-  { key: :stop, view: stop_btn, x: CONTENT_X + CONTENT_W - 80, y: TOPBAR_H + 35, w: 64, h: 48 },
-  { key: :refresh, view: refresh_btn, x: CONTENT_X + CONTENT_W - 124, y: TOPBAR_H + 112, w: 110, h: 34 }
-]
+expand_all_btn = QPushButton.new(window)
+expand_all_btn.set_geometry(CONTENT_X + CONTENT_W - 364, TOPBAR_H + 112, 112, 34)
+expand_all_btn.set_style_sheet(BTN_GHOST)
+expand_all_btn.set_text('EXPAND ALL')
 
-inside = lambda do |x, y, rect|
-  x >= rect[:x] && x < rect[:x] + rect[:w] && y >= rect[:y] && y < rect[:y] + rect[:h]
-end
+collapse_all_btn = QPushButton.new(window)
+collapse_all_btn.set_geometry(CONTENT_X + CONTENT_W - 244, TOPBAR_H + 112, 112, 34)
+collapse_all_btn.set_style_sheet(BTN_GHOST)
+collapse_all_btn.set_text('COLLAPSE ALL')
 
 run_t = lambda do |*args|
   begin
@@ -199,24 +216,49 @@ run_t = lambda do |*args|
   end
 end
 
+dbg = lambda do |msg|
+  puts "[timetrap-ui] #{msg}" if DEBUG_UI
+end
+
+ptr = lambda do |obj|
+  h = obj&.handle
+  h ? format('0x%x', h.address) : 'nil'
+rescue StandardError
+  'err'
+end
+
+geo = lambda do |x, y, w, h|
+  "x=#{x} y=#{y} w=#{w} h=#{h}"
+end
+
 fetch_entries = lambda do
   if TIMETRAP_API
     Timetrap::Entry.order(:start).all.map do |e|
       {
-        'id' => e.id,
-        'note' => e.note.to_s,
-        'start' => e[:start]&.strftime('%Y-%m-%d %H:%M:%S %z'),
-        'end' => e[:end]&.strftime('%Y-%m-%d %H:%M:%S %z'),
-        'sheet' => e.sheet.to_s
+        id: e.id,
+        note: e.note.to_s,
+        sheet: e.sheet.to_s,
+        start_time: e[:start],
+        end_time: e[:end]
       }
     end
   else
-    ok_all, out_all = run_t.call('display', '--format', 'json')
-    return [] unless ok_all
+    ok, out = run_t.call('display', '--format', 'json')
+    return [] unless ok
 
     begin
-      parsed = JSON.parse(out_all)
-      parsed.is_a?(Array) ? parsed : []
+      parsed = JSON.parse(out)
+      return [] unless parsed.is_a?(Array)
+
+      parsed.map do |e|
+        {
+          id: e['id'],
+          note: e['note'].to_s,
+          sheet: e['sheet'].to_s,
+          start_time: (Time.parse(e['start']) rescue nil),
+          end_time: (Time.parse(e['end']) rescue nil)
+        }
+      end
     rescue JSON::ParserError
       []
     end
@@ -226,22 +268,14 @@ end
 fetch_active = lambda do
   if TIMETRAP_API
     active = Timetrap::Timer.active_entry
-    if active
-      [true, active.note.to_s, active[:start]]
-    else
-      [true, 'No running entry', nil]
-    end
+    [active, active ? active[:start] : nil]
   else
-    ok_now, out_now = run_t.call('now')
-    started_at = nil
-    if ok_now && out_now =~ /(\d{4}-\d{2}-\d{2} [0-9:]+ [+-]\d{4})/
-      begin
-        started_at = Time.parse(Regexp.last_match(1))
-      rescue ArgumentError
-        started_at = nil
-      end
+    ok, out = run_t.call('now')
+    if ok && out =~ /(\d{4}-\d{2}-\d{2} [0-9:]+ [+-]\d{4})/
+      [true, (Time.parse(Regexp.last_match(1)) rescue nil)]
+    else
+      [nil, nil]
     end
-    [ok_now, out_now.to_s.strip, started_at]
   end
 end
 
@@ -254,46 +288,11 @@ seconds_to_hms = lambda do |seconds|
 end
 
 entry_seconds = lambda do |entry|
-  start_s = entry['start']
-  finish_s = entry['end']
-  return 0 if start_s.nil? || start_s.empty?
+  st = entry[:start_time]
+  en = entry[:end_time] || Time.now
+  return 0 unless st
 
-  begin
-    t0 = Time.parse(start_s)
-    t1 = finish_s && !finish_s.empty? ? Time.parse(finish_s) : Time.now
-    [t1 - t0, 0].max.to_i
-  rescue StandardError
-    0
-  end
-end
-
-fmt_entry_day = lambda do |entry|
-  return '-' unless entry['start']
-
-  begin
-    Time.parse(entry['start']).strftime('%a, %b %d')
-  rescue StandardError
-    '-'
-  end
-end
-
-fmt_entry_range = lambda do |entry|
-  begin
-    s = entry['start'] ? Time.parse(entry['start']).strftime('%H:%M') : '--:--'
-    e = entry['end'] ? Time.parse(entry['end']).strftime('%H:%M') : 'running'
-    "#{s} - #{e}"
-  rescue StandardError
-    '--:-- - --:--'
-  end
-end
-
-week_start_for = lambda do |entry|
-  begin
-    dt = Time.parse(entry['start']).to_date
-    dt - ((dt.wday + 6) % 7)
-  rescue StandardError
-    Date.today
-  end
+  [en.to_i - st.to_i, 0].max
 end
 
 split_sheet = lambda do |sheet|
@@ -312,13 +311,36 @@ split_sheet = lambda do |sheet|
   end
 end
 
+week_start_for = lambda do |entry|
+  dt = entry[:start_time]&.to_date || Date.today
+  dt - ((dt.wday + 6) % 7)
+end
+
+fmt_day = lambda do |entry|
+  (entry[:start_time] || Time.now).strftime('%a, %b %d')
+end
+
+fmt_range = lambda do |entry|
+  s = entry[:start_time] ? entry[:start_time].strftime('%H:%M') : '--:--'
+  e = entry[:end_time] ? entry[:end_time].strftime('%H:%M') : 'running'
+  "#{s} - #{e}"
+end
+
 current_started_at = nil
 selected_project = '* ALL'
 entries_cache = []
+expanded_rows = {}
+expanded_weeks = {}
+render_widgets = []
+pending_render = false
+pending_refresh = false
+last_week_keys = []
+last_project_keys = []
 
 refresh_project_sidebar = lambda do
-  projects = entries_cache.map { |e| split_sheet.call(e['sheet']).first }.uniq.sort
+  projects = entries_cache.map { |e| split_sheet.call(e[:sheet]).first }.uniq.sort
   values = ['* ALL', *projects].first(PROJECT_SLOT_COUNT)
+  dbg.call("sidebar projects=#{projects.length} selected=#{selected_project.inspect}")
 
   project_slots.each_with_index do |slot, i|
     project = values[i]
@@ -334,16 +356,30 @@ refresh_project_sidebar = lambda do
   end
 end
 
-render_table = lambda do
+add_row_label = lambda do |x, y, w, h, style, text, center: false|
+  label = QLabel.new(scroll_host)
+  label.set_geometry(x, y, w, h)
+  label.set_style_sheet(style)
+  label.set_text(text)
+  label.set_alignment(Qt::AlignCenter) if center
+  label.show
+  render_widgets << label
+  label
+end
+
+render_blocks = lambda do
+  render_widgets.each(&:hide)
+  render_widgets.clear
+
   filtered = if selected_project == '* ALL'
                entries_cache.dup
              else
-               entries_cache.select { |e| split_sheet.call(e['sheet']).first == selected_project }
+               entries_cache.select { |e| split_sheet.call(e[:sheet]).first == selected_project }
              end
+  dbg.call("render begin selected=#{selected_project.inspect} entries_cache=#{entries_cache.length} filtered=#{filtered.length}")
 
-  recent = filtered.last(220).reverse
+  recent = filtered.last(260).reverse
 
-  # Group by week start (descending by week)
   by_week = {}
   recent.each do |entry|
     ws = week_start_for.call(entry)
@@ -351,112 +387,168 @@ render_table = lambda do
     by_week[ws] << entry
   end
 
-  weeks = by_week.keys.sort.reverse
-  total_rows = 1 + weeks.sum { |wk| 1 + by_week[wk].length }
-
-  entries_table.clear_contents
-  entries_table.set_row_count(total_rows)
-
-  headers = ['Day', 'Project', 'Task', 'Note', 'Range', 'Duration']
-  headers.each_with_index do |h, col|
-    cell = QLabel.new(entries_table)
-    cell.set_alignment(Qt::AlignCenter)
-    cell.set_style_sheet(CELL_HEAD)
-    cell.set_text(h)
-    entries_table.set_cell_widget(0, col, cell)
-  end
-  entries_table.set_row_height(0, 30)
-
+  y = 10
   total_sec = 0
-  row = 1
-  weeks.each do |wk|
+  week_count = 0
+  day_count = 0
+  project_group_count = 0
+  week_keys_this_render = []
+  project_keys_this_render = []
+
+  by_week.keys.sort.reverse.each do |wk|
+    week_count += 1
     week_entries = by_week[wk]
     week_sec = week_entries.sum { |e| entry_seconds.call(e) }
     total_sec += week_sec
+    week_key = wk.iso8601
+    week_keys_this_render << week_key
+    week_expanded = expanded_weeks.fetch(week_key, true)
+    week_marker = week_expanded ? '▼' : '▶'
+    week_label = QLabel.new(scroll_host)
+    week_label.set_geometry(10, y, CONTENT_W - 162, 44)
+    week_label.set_style_sheet(WEEK_STYLE)
+    week_label.set_text("#{week_marker}  #{wk.strftime('%b %-d')} - #{(wk + 6).strftime('%b %-d')}         Week total: #{seconds_to_hms.call(week_sec)}")
+    week_label.show
+    render_widgets << week_label
 
-    hdr = QLabel.new(entries_table)
-    hdr.set_alignment(Qt::AlignCenter)
-    hdr.set_style_sheet(CELL_GROUP)
-    hdr.set_text("Week #{wk.strftime('%Y-%m-%d')}..#{(wk + 6).strftime('%Y-%m-%d')} | Entries: #{week_entries.length} | Total: #{seconds_to_hms.call(week_sec)}")
-    entries_table.set_cell_widget(row, 0, hdr)
-    (1..5).each do |c|
-      filler = QLabel.new(entries_table)
-      filler.set_alignment(Qt::AlignCenter)
-      filler.set_style_sheet(CELL_GROUP)
-      filler.set_text('')
-      entries_table.set_cell_widget(row, c, filler)
+    toggle = QLabel.new(scroll_host)
+    toggle.set_geometry(CONTENT_W - 144, y + 4, 132, 36)
+    toggle.set_style_sheet(PROJECT_ROW)
+    toggle.set_alignment(Qt::AlignCenter)
+    toggle.set_text(week_expanded ? 'COLLAPSE WEEK' : 'EXPAND WEEK')
+    toggle.show
+    render_widgets << toggle
+
+    week_click_key = week_key
+    toggle.on(:mouse_button_release) do |_ev|
+      expanded_weeks[week_click_key] = !expanded_weeks.fetch(week_click_key, true)
+      dbg.call("click week-toggle #{week_click_key} expanded=#{expanded_weeks[week_click_key]}")
+      pending_render = true
     end
-    entries_table.set_row_height(row, 30)
-    row += 1
+    y += 52
+    next unless week_expanded
 
+    by_day = {}
     week_entries.each do |entry|
-      project, task = split_sheet.call(entry['sheet'])
-      note = entry['note'].to_s.strip
-      note = '(no note)' if note.empty?
-      dur = seconds_to_hms.call(entry_seconds.call(entry))
-
-      c1 = QLabel.new(entries_table)
-      c1.set_alignment(Qt::AlignCenter)
-      c1.set_style_sheet(CELL_TEXT)
-      c1.set_text(fmt_entry_day.call(entry))
-      entries_table.set_cell_widget(row, 0, c1)
-
-      c2 = QLabel.new(entries_table)
-      c2.set_alignment(Qt::AlignCenter)
-      c2.set_style_sheet(CELL_TEXT)
-      c2.set_text(project[0, 30])
-      entries_table.set_cell_widget(row, 1, c2)
-
-      c3 = QLabel.new(entries_table)
-      c3.set_alignment(Qt::AlignCenter)
-      c3.set_style_sheet(CELL_TEXT)
-      c3.set_text(task[0, 30])
-      entries_table.set_cell_widget(row, 2, c3)
-
-      c4 = QLabel.new(entries_table)
-      c4.set_alignment(Qt::AlignCenter)
-      c4.set_style_sheet(CELL_TEXT)
-      c4.set_text(note[0, 48])
-      entries_table.set_cell_widget(row, 3, c4)
-
-      c5 = QLabel.new(entries_table)
-      c5.set_alignment(Qt::AlignCenter)
-      c5.set_style_sheet(CELL_TEXT)
-      c5.set_text(fmt_entry_range.call(entry))
-      entries_table.set_cell_widget(row, 4, c5)
-
-      c6 = QLabel.new(entries_table)
-      c6.set_alignment(Qt::AlignCenter)
-      c6.set_style_sheet(CELL_DUR)
-      c6.set_text(dur)
-      entries_table.set_cell_widget(row, 5, c6)
-
-      entries_table.set_row_height(row, 34)
-      row += 1
+      day_key = (entry[:start_time] || Time.now).to_date
+      by_day[day_key] ||= []
+      by_day[day_key] << entry
     end
+
+    by_day.keys.sort.reverse.each do |day|
+      day_count += 1
+      day_entries = by_day[day]
+      day_sec = day_entries.sum { |e| entry_seconds.call(e) }
+      add_row_label.call(14, y, CONTENT_W - 54, 38, DAY_STYLE,
+                         "#{day.strftime('%a, %b %-d')}                                      Total: #{seconds_to_hms.call(day_sec)}")
+      y += 42
+
+      by_project = {}
+      day_entries.each do |entry|
+        project, task = split_sheet.call(entry[:sheet])
+        key = "#{project}\u0000#{task}"
+        by_project[key] ||= { project: project, task: task, entries: [] }
+        by_project[key][:entries] << entry
+      end
+
+      by_project.values.sort_by { |g| [g[:project].downcase, g[:task].downcase] }.each do |group|
+        project_group_count += 1
+        p_total = group[:entries].sum { |e| entry_seconds.call(e) }
+        exp_key = "#{day}|#{group[:project]}|#{group[:task]}"
+        project_keys_this_render << exp_key
+        expanded = expanded_rows[exp_key]
+        marker = expanded ? '▼' : '▶'
+
+        click_key = exp_key
+        row = QLabel.new(scroll_host)
+        row.set_geometry(18, y, CONTENT_W - 62, 40)
+        row.set_style_sheet(PROJECT_ROW)
+        row.set_text("#{marker}  #{group[:project]}  |  #{group[:task]}   (#{group[:entries].length} entries)   #{seconds_to_hms.call(p_total)}")
+        row.show
+        render_widgets << row
+        row.on(:mouse_button_release) do |_ev|
+          dbg.call("click project-row #{click_key}")
+          expanded_rows[click_key] = !expanded_rows[click_key]
+          dbg.call("click project-row toggled #{click_key}=#{expanded_rows[click_key]}")
+          pending_render = true
+        end
+        y += 42
+
+        if expanded
+          group[:entries].sort_by { |e| e[:start_time] || Time.now }.reverse.each do |entry|
+            note = entry[:note].to_s.strip
+            note = '(no note)' if note.empty?
+            detail = "#{fmt_range.call(entry)}   #{seconds_to_hms.call(entry_seconds.call(entry))}   #{note[0, 80]}"
+            add_row_label.call(26, y, CONTENT_W - 78, 34, DETAIL_ROW, detail)
+            y += 36
+          end
+        end
+      end
+
+      y += 10
+    end
+
+    y += 8
+  end
+
+  if filtered.empty?
+    add_row_label.call(18, y + 8, CONTENT_W - 62, 44, DAY_STYLE, "No entries for filter: #{selected_project}")
+    y += 56
+    dbg.call("render empty for selected=#{selected_project.inspect}")
   end
 
   summary.set_text("Selected: #{selected_project} | Entries: #{filtered.length} | Total: #{seconds_to_hms.call(total_sec)}")
-  project_pill.set_text("Project filter: #{selected_project[0, 18]}")
+  project_pill.set_text("Project: #{selected_project[0, 20]}")
+  last_week_keys = week_keys_this_render
+  last_project_keys = project_keys_this_render
 
-  table_h = [(total_rows * 36) + 20, 520].max
-  scroll_host.set_geometry(0, 0, CONTENT_W - 20, table_h + 20)
-  entries_table.set_geometry(8, 8, CONTENT_W - 40, table_h)
+  content_h = [y + 30, 900].max
+  host_w = CONTENT_W - 20
+  scroll_host.set_geometry(0, 0, host_w, content_h)
+  btn_count = render_widgets.count { |w| w.is_a?(QPushButton) }
+  row_count = render_widgets.count { |w| w.is_a?(QLabel) && w.respond_to?(:on) }
+  lbl_count = render_widgets.count { |w| w.is_a?(QLabel) }
+  dbg.call("render done weeks=#{week_count} days=#{day_count} groups=#{project_group_count} content_h=#{content_h} widgets_total=#{render_widgets.length} labels=#{lbl_count} buttons=#{btn_count} click_rows=#{row_count}")
+  dbg.call("render geometry scroll=#{geo.call(CONTENT_X, TOPBAR_H + 156, CONTENT_W, WINDOW_H - (TOPBAR_H + 170))} host=#{geo.call(0, 0, host_w, content_h)}")
+  if DEBUG_UI
+    sample = render_widgets.first(3).map do |w|
+      t =
+        if w.respond_to?(:text)
+          w.text.to_s
+        elsif w.respond_to?(:window_title)
+          w.window_title.to_s
+        else
+          ''
+        end
+      "#{w.class}@#{ptr.call(w)}:#{t[0, 48].inspect}"
+    end
+    dbg.call("render sample #{sample.join(' | ')}")
+    dbg.call("render visible window=#{window.is_visible} host=#{scroll_host.is_visible}")
+  end
+
 end
 
 refresh_data = lambda do
-  ok_now, now_text, started_at = fetch_active.call
+  active, started_at = fetch_active.call
   current_started_at = started_at
-  entries_cache = fetch_entries.call
 
-  projects = entries_cache.map { |e| split_sheet.call(e['sheet']).first }.uniq
+  entries_cache = fetch_entries.call
+  dbg.call("refresh_data fetched entries=#{entries_cache.length} api=#{TIMETRAP_API}")
+  projects = entries_cache.map { |e| split_sheet.call(e[:sheet]).first }.uniq
   selected_project = '* ALL' if selected_project != '* ALL' && !projects.include?(selected_project)
 
-  title_text = ok_now ? now_text.to_s.lines.first.to_s.strip : now_text.to_s
-  task_input.text = title_text.empty? ? 'gui-clockify' : title_text[0, 100]
+  if active && active.respond_to?(:note)
+    txt = active.note.to_s.strip
+    task_input.text = txt.empty? ? 'gui-clockify' : txt[0, 100]
+  elsif task_input.text.to_s.strip.empty?
+    task_input.text = 'gui-clockify'
+  end
+
+  expanded_weeks.clear
+  expanded_rows.clear
 
   refresh_project_sidebar.call
-  render_table.call
+  render_blocks.call
 end
 
 flash = lambda do |label|
@@ -478,33 +570,84 @@ handle_action = lambda do |key|
   when :start
     note = task_input.text.to_s.strip
     note = 'gui-clockify' if note.empty?
+
     if TIMETRAP_API
       begin
         Timetrap::Timer.start(note)
-        current_started_at = Time.now
       rescue StandardError
-        # fall through to refresh
+        # ignore and refresh
       end
     else
-      ok, _out = run_t.call('in', note)
-      current_started_at = Time.now if ok
+      run_t.call('in', note)
     end
-    refresh_data.call
+
+    pending_refresh = true
   when :stop
     if TIMETRAP_API
       begin
         active = Timetrap::Timer.active_entry
         Timetrap::Timer.stop(active) if active
       rescue StandardError
-        # fall through to refresh
+        # ignore and refresh
       end
     else
       run_t.call('out')
     end
+
     current_started_at = nil
-    refresh_data.call
+    pending_refresh = true
   when :refresh
-    refresh_data.call
+    pending_refresh = true
+  end
+end
+
+start_btn.connect('clicked') do |_checked|
+  dbg.call('click START')
+  flash.call(start_btn)
+  pending_refresh = true
+  handle_action.call(:start)
+end
+
+stop_btn.connect('clicked') do |_checked|
+  dbg.call('click STOP')
+  flash.call(stop_btn)
+  pending_refresh = true
+  handle_action.call(:stop)
+end
+
+refresh_btn.connect('clicked') do |_checked|
+  dbg.call('click REFRESH')
+  flash.call(refresh_btn)
+  pending_refresh = true
+  handle_action.call(:refresh)
+end
+
+expand_all_btn.connect('clicked') do |_checked|
+  dbg.call('click EXPAND ALL')
+  flash.call(expand_all_btn)
+  last_week_keys.each { |wk| expanded_weeks[wk] = true }
+  last_project_keys.each { |pk| expanded_rows[pk] = true }
+  pending_render = true
+end
+
+collapse_all_btn.connect('clicked') do |_checked|
+  dbg.call('click COLLAPSE ALL')
+  flash.call(collapse_all_btn)
+  last_week_keys.each { |wk| expanded_weeks[wk] = false }
+  last_project_keys.each { |pk| expanded_rows[pk] = false }
+  pending_render = true
+end
+
+project_slots.each do |slot|
+  this_slot = slot
+  this_slot[:view].connect('clicked') do |_checked|
+    next unless this_slot[:project]
+
+    dbg.call("click project #{this_slot[:project].inspect}")
+    selected_project = this_slot[:project]
+    refresh_project_sidebar.call
+    dbg.call("click project selected=#{selected_project.inspect} slot_y=#{this_slot[:y]} slot_h=#{this_slot[:h]}")
+    pending_render = true
   end
 end
 
@@ -512,8 +655,7 @@ refresh_data.call
 window.show
 QApplication.process_events
 
-prev_left = false
-last_timer_tick = Time.now
+last_tick = Time.now
 
 loop do
   QApplication.process_events
@@ -528,33 +670,20 @@ loop do
     live_timer.set_text('00:00:00')
   end
 
-  if now - last_timer_tick > 30
+  if AUTO_REFRESH_SEC.positive? && now - last_tick > AUTO_REFRESH_SEC
+    dbg.call("auto refresh tick interval=#{AUTO_REFRESH_SEC}s")
+    pending_refresh = true
+    last_tick = now
+  end
+
+  if pending_refresh
     refresh_data.call
-    last_timer_tick = now
+    pending_refresh = false
+    pending_render = false
+  elsif pending_render
+    render_blocks.call
+    pending_render = false
   end
-
-  mx = QApplication.mouse_x
-  my = QApplication.mouse_y
-  left = (QApplication.mouse_buttons & LEFT_BUTTON) != 0
-  lx = Qt::Native.qwidget_map_from_global_x(window.handle, mx, my)
-  ly = Qt::Native.qwidget_map_from_global_y(window.handle, mx, my)
-
-  if left && !prev_left
-    clicked = clickables.find { |c| inside.call(lx, ly, c) }
-    if clicked
-      flash.call(clicked[:view])
-      handle_action.call(clicked[:key])
-    end
-
-    project_clicked = project_slots.find { |s| s[:project] && inside.call(lx, ly, s) }
-    if project_clicked
-      selected_project = project_clicked[:project]
-      refresh_project_sidebar.call
-      render_table.call
-    end
-  end
-
-  prev_left = left
   sleep(0.01)
 end
 

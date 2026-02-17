@@ -7,8 +7,6 @@ WINDOW_W = 980
 WINDOW_H = 620
 PANEL_W = 280
 
-LEFT_BUTTON = 1
-
 BASE_BG = 'background-color: #f4f4f5; border: 1px solid #d4d4d8;'
 CARD_LIGHT = 'background-color: #ffffff; border: 1px solid #d4d4d8; color: #111827; font-size: 12px;'
 CARD_DARK = 'background-color: #1f2937; border: 1px solid #374151; color: #f3f4f6; font-size: 12px;'
@@ -65,9 +63,8 @@ buttons = [
 ]
 
 buttons.each do |btn|
-  view = QLabel.new(window)
+  view = QPushButton.new(window)
   view.set_geometry(WINDOW_W - PANEL_W + 16, btn[:y], PANEL_W - 32, 36)
-  view.set_alignment(Qt::AlignCenter)
   view.set_text(btn[:text])
   btn[:view] = view
 end
@@ -80,11 +77,6 @@ hint.set_text("Mouse controls:\n- Click side buttons\n- Resize window and see la
 items = []
 counter = 1
 dark = false
-prev_left_down = false
-
-inside = lambda do |x, y, gx, gy, w, h|
-  x >= gx && x < gx + w && y >= gy && y < gy + h
-end
 
 apply_theme = lambda do
   if dark
@@ -180,6 +172,13 @@ perform_action = lambda do |key|
   refresh_status.call unless key == :inspect
 end
 
+buttons.each do |btn|
+  btn[:view].connect('clicked') do |_checked|
+    flash_button.call(btn[:key])
+    perform_action.call(btn[:key])
+  end
+end
+
 apply_theme.call
 refresh_status.call
 window.show
@@ -188,23 +187,6 @@ QApplication.process_events
 loop do
   QApplication.process_events
   break if window.is_visible.zero?
-
-  mx = QApplication.mouse_x
-  my = QApplication.mouse_y
-  left_down = (QApplication.mouse_buttons & LEFT_BUTTON) != 0
-
-  lx = Qt::Native.qwidget_map_from_global_x(window.handle, mx, my)
-  ly = Qt::Native.qwidget_map_from_global_y(window.handle, mx, my)
-
-  if left_down && !prev_left_down
-    clicked = buttons.find { |b| inside.call(lx, ly, WINDOW_W - PANEL_W + 16, b[:y], PANEL_W - 32, 36) }
-    if clicked
-      flash_button.call(clicked[:key])
-      perform_action.call(clicked[:key])
-    end
-  end
-
-  prev_left_down = left_down
   sleep(0.01)
 end
 

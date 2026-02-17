@@ -10,8 +10,6 @@ PANEL_WIDTH = 180
 WINDOW_WIDTH = COLS * CELL + PANEL_WIDTH
 WINDOW_HEIGHT = ROWS * CELL
 
-LEFT_BUTTON = 1
-
 EMPTY_STYLE = 'background-color: #fafafa; border: 1px solid #e6e6e6;'
 BORDER_STYLE = 'background-color: #f3f3f3; border: 1px solid #d5d5d5;'
 TEXT_STYLE = 'background-color: #ffffff; border: 1px solid #cccccc;'
@@ -101,9 +99,8 @@ buttons = [
 ]
 
 buttons.each do |btn|
-  view = QLabel.new(window)
+  view = QPushButton.new(window)
   view.set_geometry(btn[:x], btn[:y], btn[:w], btn[:h])
-  view.set_alignment(Qt::AlignCenter)
   view.set_text(btn[:text])
   view.set_style_sheet(BTN_STYLE)
   btn[:view] = view
@@ -114,18 +111,6 @@ score = 0
 lines = 0
 fall_interval = 0.45
 last_fall = Time.now
-prev_left_down = false
-prev_keys = {
-  left: false,
-  right: false,
-  rotate: false,
-  drop: false,
-  new: false
-}
-
-inside = lambda do |x, y, gx, gy, w, h|
-  x >= gx && x < gx + w && y >= gy && y < gy + h
-end
 
 valid_position = lambda do |piece, dx, dy, shape = nil|
   test = shape || piece[:shape]
@@ -252,49 +237,29 @@ trigger_action = lambda do |action|
   perform_action.call(action)
 end
 
+buttons.each do |btn|
+  btn[:view].connect('clicked') do |_checked|
+    trigger_action.call(btn[:key])
+  end
+end
+
+window.on(:key_press) do |ev|
+  action = case ev[:a]
+           when Qt::KeyLeft then :left
+           when Qt::KeyRight then :right
+           when Qt::KeyUp then :rotate
+           when Qt::KeyDown, Qt::KeySpace then :drop
+           when Qt::KeyN then :new
+           end
+  trigger_action.call(action) if action
+end
+
 restart.call
 window.show
 
 loop do
   QApplication.process_events
   break if window.is_visible.zero?
-
-  mx = QApplication.mouse_x
-  my = QApplication.mouse_y
-  buttons_mask = QApplication.mouse_buttons
-  left_down = (buttons_mask & LEFT_BUTTON) != 0
-
-  lx = Qt::Native.qwidget_map_from_global_x(window.handle, mx, my)
-  ly = Qt::Native.qwidget_map_from_global_y(window.handle, mx, my)
-
-  if left_down && !prev_left_down
-    clicked = buttons.find { |btn| inside.call(lx, ly, btn[:x], btn[:y], btn[:w], btn[:h]) }
-    if clicked
-      trigger_action.call(clicked[:key])
-    end
-  end
-
-  key_left = QApplication.key_down(Qt::KeyLeft) != 0
-  key_right = QApplication.key_down(Qt::KeyRight) != 0
-  key_rotate = QApplication.key_down(Qt::KeyUp) != 0
-  key_drop = QApplication.key_down(Qt::KeySpace) != 0 || QApplication.key_down(Qt::KeyDown) != 0
-  key_new = QApplication.key_down(Qt::KeyN) != 0
-
-  if key_left && !prev_keys[:left]
-    trigger_action.call(:left)
-  end
-  if key_right && !prev_keys[:right]
-    trigger_action.call(:right)
-  end
-  if key_rotate && !prev_keys[:rotate]
-    trigger_action.call(:rotate)
-  end
-  if key_drop && !prev_keys[:drop]
-    trigger_action.call(:drop)
-  end
-  if key_new && !prev_keys[:new]
-    trigger_action.call(:new)
-  end
 
   if current && Time.now - last_fall >= fall_interval
     if valid_position.call(current, 0, 1)
@@ -315,12 +280,6 @@ loop do
   end
 
   paint.call
-  prev_left_down = left_down
-  prev_keys[:left] = key_left
-  prev_keys[:right] = key_right
-  prev_keys[:rotate] = key_rotate
-  prev_keys[:drop] = key_drop
-  prev_keys[:new] = key_new
   sleep(0.01)
 end
 

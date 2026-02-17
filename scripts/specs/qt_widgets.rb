@@ -96,25 +96,7 @@ module QtRubyGenerator
             ruby_name: 'setAlignment',
             ffi_return: :void,
             args: [{ name: 'alignment', ffi: :int, cast: :alignment }]
-          },
-          {
-            qt_name: 'setGeometry',
-            ruby_name: 'setGeometry',
-            ffi_return: :void,
-            args: [
-              { name: 'x', ffi: :int },
-              { name: 'y', ffi: :int },
-              { name: 'width', ffi: :int },
-              { name: 'height', ffi: :int }
-            ]
-          },
-          {
-            qt_name: 'setStyleSheet',
-            ruby_name: 'setStyleSheet',
-            ffi_return: :void,
-            args: [{ name: 'style', ffi: :string, cast: :qstring }]
-          },
-          { qt_name: 'hide', ruby_name: 'hide', ffi_return: :void, args: [] }
+          }
         ],
         validate: { constructors: ['QLabel'], methods: ['setText', 'setAlignment'] }
       },
@@ -130,25 +112,7 @@ module QtRubyGenerator
             ruby_name: 'setText',
             ffi_return: :void,
             args: [{ name: 'text', ffi: :string, cast: :qstring }]
-          },
-          {
-            qt_name: 'setGeometry',
-            ruby_name: 'setGeometry',
-            ffi_return: :void,
-            args: [
-              { name: 'x', ffi: :int },
-              { name: 'y', ffi: :int },
-              { name: 'width', ffi: :int },
-              { name: 'height', ffi: :int }
-            ]
-          },
-          {
-            qt_name: 'setStyleSheet',
-            ruby_name: 'setStyleSheet',
-            ffi_return: :void,
-            args: [{ name: 'style', ffi: :string, cast: :qstring }]
-          },
-          { qt_name: 'hide', ruby_name: 'hide', ffi_return: :void, args: [] }
+          }
         ],
         validate: { constructors: ['QPushButton'], methods: [] }
       },
@@ -170,25 +134,7 @@ module QtRubyGenerator
             ruby_name: 'setPlaceholderText',
             ffi_return: :void,
             args: [{ name: 'text', ffi: :string, cast: :qstring }]
-          },
-          {
-            qt_name: 'setGeometry',
-            ruby_name: 'setGeometry',
-            ffi_return: :void,
-            args: [
-              { name: 'x', ffi: :int },
-              { name: 'y', ffi: :int },
-              { name: 'width', ffi: :int },
-              { name: 'height', ffi: :int }
-            ]
-          },
-          {
-            qt_name: 'setStyleSheet',
-            ruby_name: 'setStyleSheet',
-            ffi_return: :void,
-            args: [{ name: 'style', ffi: :string, cast: :qstring }]
-          },
-          { qt_name: 'hide', ruby_name: 'hide', ffi_return: :void, args: [] }
+          }
         ],
         validate: { constructors: ['QLineEdit'], methods: [] }
       },
@@ -221,27 +167,12 @@ module QtRubyGenerator
         prefix: 'qtable_widget',
         constructor: { parent: true, parent_type: 'QWidget*', register_in_parent: true },
         methods: [
-          {
-            qt_name: 'setGeometry',
-            ruby_name: 'setGeometry',
-            ffi_return: :void,
-            args: [
-              { name: 'x', ffi: :int },
-              { name: 'y', ffi: :int },
-              { name: 'width', ffi: :int },
-              { name: 'height', ffi: :int }
-            ]
-          },
-          {
-            qt_name: 'setStyleSheet',
-            ruby_name: 'setStyleSheet',
-            ffi_return: :void,
-            args: [{ name: 'style', ffi: :string, cast: :qstring }]
-          },
           { qt_name: 'setColumnCount', ruby_name: 'setColumnCount', ffi_return: :void, args: [{ name: 'count', ffi: :int }] },
           { qt_name: 'setRowCount', ruby_name: 'setRowCount', ffi_return: :void, args: [{ name: 'count', ffi: :int }] },
           { qt_name: 'setColumnWidth', ruby_name: 'setColumnWidth', ffi_return: :void, args: [{ name: 'column', ffi: :int }, { name: 'width', ffi: :int }] },
           { qt_name: 'setRowHeight', ruby_name: 'setRowHeight', ffi_return: :void, args: [{ name: 'row', ffi: :int }, { name: 'height', ffi: :int }] },
+          { qt_name: 'setVerticalScrollMode', ruby_name: 'setVerticalScrollMode', ffi_return: :void, args: [{ name: 'mode', ffi: :int, cast: 'QAbstractItemView::ScrollMode' }] },
+          { qt_name: 'setHorizontalScrollBarPolicy', ruby_name: 'setHorizontalScrollBarPolicy', ffi_return: :void, args: [{ name: 'policy', ffi: :int, cast: 'Qt::ScrollBarPolicy' }] },
           { qt_name: 'clearContents', ruby_name: 'clearContents', ffi_return: :void, args: [] },
           {
             qt_name: 'setCellWidget',
@@ -263,23 +194,6 @@ module QtRubyGenerator
         prefix: 'qscroll_area',
         constructor: { parent: true, parent_type: 'QWidget*', register_in_parent: true },
         methods: [
-          {
-            qt_name: 'setGeometry',
-            ruby_name: 'setGeometry',
-            ffi_return: :void,
-            args: [
-              { name: 'x', ffi: :int },
-              { name: 'y', ffi: :int },
-              { name: 'width', ffi: :int },
-              { name: 'height', ffi: :int }
-            ]
-          },
-          {
-            qt_name: 'setStyleSheet',
-            ruby_name: 'setStyleSheet',
-            ffi_return: :void,
-            args: [{ name: 'style', ffi: :string, cast: :qstring }]
-          },
           {
             qt_name: 'setWidgetResizable',
             ruby_name: 'setWidgetResizable',
