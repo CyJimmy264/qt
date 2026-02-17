@@ -17,9 +17,6 @@ class QtBindingsTest < Minitest::Test
     app = QApplication.new(0, [])
     assert_equal app, Qt::QApplication.current
     assert_equal QApplication.qtVersion, QApplication.qt_version
-    assert_respond_to QApplication, :mouse_x
-    assert_respond_to QApplication, :mouse_y
-    assert_respond_to QApplication, :mouse_buttons
   ensure
     app&.dispose
   end

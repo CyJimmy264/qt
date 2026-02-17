@@ -68,7 +68,6 @@ end
 
 selected_index = 0
 selected_style = PALETTE[selected_index][:style]
-prev_left_down = false
 
 refresh_palette = lambda do
   swatches.each_with_index do |swatch, idx|
@@ -87,57 +86,59 @@ clear_canvas = lambda do
   end
 end
 
-inside = lambda do |x, y, gx, gy, w, h|
-  x >= gx && x < gx + w && y >= gy && y < gy + h
+inside = lambda { |x, y, gx, gy, w, h| x >= gx && x < gx + w && y >= gy && y < gy + h }
+
+paint_at = lambda do |x, y, erase|
+  return unless inside.call(x, y, 0, TOOLBAR_HEIGHT, CANVAS_WIDTH, CANVAS_HEIGHT)
+
+  col = x / CELL
+  row = (y - TOOLBAR_HEIGHT) / CELL
+  pixel = cells[row][col]
+  pixel.set_style_sheet(erase ? ERASE_STYLE : selected_style)
 end
 
 window.show
 QApplication.process_events
 refresh_palette.call
 
-loop do
-  QApplication.process_events
-  break if window.is_visible.zero?
+window.on(:mouse_button_press) do |evt|
+  x = evt[:a]
+  y = evt[:b]
+  button = evt[:c]
 
-  mx = QApplication.mouse_x
-  my = QApplication.mouse_y
-  buttons = QApplication.mouse_buttons
-
-  local_x = Qt::Native.qwidget_map_from_global_x(window.handle, mx, my)
-  local_y = Qt::Native.qwidget_map_from_global_y(window.handle, mx, my)
-
-  left_down = (buttons & LEFT_BUTTON) != 0
-  right_down = (buttons & RIGHT_BUTTON) != 0
-
-  if left_down && !prev_left_down
+  if button == LEFT_BUTTON
     swatches.each_with_index do |_swatch, idx|
       sx = 285 + idx * 34
-      if inside.call(local_x, local_y, sx, 7, 28, 28)
-        selected_index = idx
-        selected_style = PALETTE[selected_index][:style]
-        refresh_palette.call
-      end
+      next unless inside.call(x, y, sx, 7, 28, 28)
+
+      selected_index = idx
+      selected_style = PALETTE[selected_index][:style]
+      refresh_palette.call
     end
 
-    if inside.call(local_x, local_y, 285 + PALETTE.length * 34 + 12, 7, 100, 28)
+    if inside.call(x, y, 285 + PALETTE.length * 34 + 12, 7, 100, 28)
       clear_canvas.call
       status.set_text("Color: #{PALETTE[selected_index][:name]} (canvas cleared)")
     end
   end
 
-  if inside.call(local_x, local_y, 0, TOOLBAR_HEIGHT, CANVAS_WIDTH, CANVAS_HEIGHT)
-    col = local_x / CELL
-    row = (local_y - TOOLBAR_HEIGHT) / CELL
-    pixel = cells[row][col]
+  paint_at.call(x, y, button == RIGHT_BUTTON)
+end
 
-    if left_down
-      pixel.set_style_sheet(selected_style)
-    elsif right_down
-      pixel.set_style_sheet(ERASE_STYLE)
-    end
+window.on(:mouse_move) do |evt|
+  x = evt[:a]
+  y = evt[:b]
+  buttons = evt[:d]
+
+  if (buttons & LEFT_BUTTON) != 0
+    paint_at.call(x, y, false)
+  elsif (buttons & RIGHT_BUTTON) != 0
+    paint_at.call(x, y, true)
   end
+end
 
-  prev_left_down = left_down
+while window.is_visible != 0
+  QApplication.process_events
   sleep(0.005)
 end
 

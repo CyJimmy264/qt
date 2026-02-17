@@ -70,18 +70,12 @@ def free_functions
     { name: 'qt_ruby_qt_version', ffi_return: :string, args: [] },
     { name: 'qt_ruby_qapplication_process_events', ffi_return: :void, args: [] },
     { name: 'qt_ruby_qapplication_top_level_widgets_count', ffi_return: :int, args: [] },
-    { name: 'qt_ruby_qapplication_mouse_x', ffi_return: :int, args: [] },
-    { name: 'qt_ruby_qapplication_mouse_y', ffi_return: :int, args: [] },
-    { name: 'qt_ruby_qapplication_mouse_buttons', ffi_return: :int, args: [] },
-    { name: 'qt_ruby_qapplication_key_down', ffi_return: :int, args: [:int] },
     { name: 'qt_ruby_set_event_callback', ffi_return: :void, args: [:pointer] },
     { name: 'qt_ruby_watch_qobject_event', ffi_return: :void, args: [:pointer, :int] },
     { name: 'qt_ruby_unwatch_qobject_event', ffi_return: :void, args: [:pointer, :int] },
     { name: 'qt_ruby_set_signal_callback', ffi_return: :void, args: [:pointer] },
     { name: 'qt_ruby_qobject_connect_signal', ffi_return: :int, args: [:pointer, :string] },
-    { name: 'qt_ruby_qobject_disconnect_signal', ffi_return: :int, args: [:pointer, :string] },
-    { name: 'qt_ruby_qwidget_map_from_global_x', ffi_return: :int, args: [:pointer, :int, :int] },
-    { name: 'qt_ruby_qwidget_map_from_global_y', ffi_return: :int, args: [:pointer, :int, :int] }
+    { name: 'qt_ruby_qobject_disconnect_signal', ffi_return: :int, args: [:pointer, :string] }
   ]
 end
 
@@ -419,22 +413,6 @@ def generate_cpp_bridge(specs)
   lines << '  return QtRubyRuntime::qapplication_top_level_widgets_count();'
   lines << '}'
   lines << ''
-  lines << 'extern "C" int qt_ruby_qapplication_mouse_x() {'
-  lines << '  return QtRubyRuntime::qapplication_mouse_x();'
-  lines << '}'
-  lines << ''
-  lines << 'extern "C" int qt_ruby_qapplication_mouse_y() {'
-  lines << '  return QtRubyRuntime::qapplication_mouse_y();'
-  lines << '}'
-  lines << ''
-  lines << 'extern "C" int qt_ruby_qapplication_mouse_buttons() {'
-  lines << '  return QtRubyRuntime::qapplication_mouse_buttons();'
-  lines << '}'
-  lines << ''
-  lines << 'extern "C" int qt_ruby_qapplication_key_down(int key) {'
-  lines << '  return QtRubyRuntime::qapplication_key_down(key);'
-  lines << '}'
-  lines << ''
   lines << 'extern "C" void qt_ruby_set_event_callback(void* callback_ptr) {'
   lines << '  QtRubyRuntime::set_event_callback(callback_ptr);'
   lines << '}'
@@ -457,14 +435,6 @@ def generate_cpp_bridge(specs)
   lines << ''
   lines << 'extern "C" int qt_ruby_qobject_disconnect_signal(void* object_handle, const char* signal_name) {'
   lines << '  return QtRubyRuntime::qobject_disconnect_signal(object_handle, signal_name);'
-  lines << '}'
-  lines << ''
-  lines << 'extern "C" int qt_ruby_qwidget_map_from_global_x(void* handle, int gx, int gy) {'
-  lines << '  return QtRubyRuntime::qwidget_map_from_global_x(handle, gx, gy);'
-  lines << '}'
-  lines << ''
-  lines << 'extern "C" int qt_ruby_qwidget_map_from_global_y(void* handle, int gx, int gy) {'
-  lines << '  return QtRubyRuntime::qwidget_map_from_global_y(handle, gx, gy);'
   lines << '}'
   lines << ''
 

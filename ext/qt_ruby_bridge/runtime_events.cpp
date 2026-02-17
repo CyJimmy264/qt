@@ -2,15 +2,12 @@
 
 #include <QApplication>
 #include <QCoreApplication>
-#include <QCursor>
 #include <QEvent>
-#include <QGuiApplication>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QObject>
 #include <QPoint>
 #include <QResizeEvent>
-#include <QWidget>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -18,53 +15,6 @@ namespace QtRubyRuntime {
 EventCallback& event_callback_ref() {
   static EventCallback callback = nullptr;
   return callback;
-}
-
-class KeyStateFilter : public QObject {
- protected:
-  bool eventFilter(QObject* watched, QEvent* event) override {
-    switch (event->type()) {
-      case QEvent::KeyPress: {
-        auto* key_event = static_cast<QKeyEvent*>(event);
-        pressed_keys().insert(key_event->key());
-        break;
-      }
-      case QEvent::KeyRelease: {
-        auto* key_event = static_cast<QKeyEvent*>(event);
-        pressed_keys().erase(key_event->key());
-        break;
-      }
-      case QEvent::ApplicationDeactivate:
-        pressed_keys().clear();
-        break;
-      default:
-        break;
-    }
-
-    return QObject::eventFilter(watched, event);
-  }
-
- private:
-  static std::unordered_set<int>& pressed_keys() {
-    static std::unordered_set<int> keys;
-    return keys;
-  }
-
- public:
-  static std::unordered_set<int>& keys_ref() { return pressed_keys(); }
-};
-
-KeyStateFilter* key_filter_instance() {
-  static KeyStateFilter filter;
-  return &filter;
-}
-
-void ensure_key_filter_installed() {
-  static bool installed = false;
-  if (!installed && qApp) {
-    qApp->installEventFilter(key_filter_instance());
-    installed = true;
-  }
 }
 
 std::unordered_map<QObject*, std::unordered_set<int>>& watched_events() {
@@ -150,20 +100,6 @@ int QtRubyRuntime::qapplication_top_level_widgets_count() {
   return QApplication::topLevelWidgets().size();
 }
 
-int QtRubyRuntime::qapplication_mouse_x() { return QCursor::pos().x(); }
-int QtRubyRuntime::qapplication_mouse_y() { return QCursor::pos().y(); }
-int QtRubyRuntime::qapplication_mouse_buttons() { return static_cast<int>(QGuiApplication::mouseButtons()); }
-
-int QtRubyRuntime::qapplication_key_down(int key) {
-  ensure_key_filter_installed();
-  if (!qApp) {
-    return 0;
-  }
-
-  const auto& keys = KeyStateFilter::keys_ref();
-  return keys.count(key) > 0 ? 1 : 0;
-}
-
 void QtRubyRuntime::set_event_callback(void* callback_ptr) {
   event_callback_ref() = reinterpret_cast<EventCallback>(callback_ptr);
   ensure_event_filter_installed();
@@ -191,20 +127,4 @@ void QtRubyRuntime::unwatch_qobject_event(void* object_handle, int event_type) {
   if (it->second.empty()) {
     watched_events().erase(it);
   }
-}
-
-int QtRubyRuntime::qwidget_map_from_global_x(void* handle, int gx, int gy) {
-  if (!handle) {
-    return 0;
-  }
-  auto* widget = static_cast<QWidget*>(handle);
-  return widget->mapFromGlobal(QPoint(gx, gy)).x();
-}
-
-int QtRubyRuntime::qwidget_map_from_global_y(void* handle, int gx, int gy) {
-  if (!handle) {
-    return 0;
-  }
-  auto* widget = static_cast<QWidget*>(handle);
-  return widget->mapFromGlobal(QPoint(gx, gy)).y();
 }

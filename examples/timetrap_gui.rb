@@ -6,7 +6,6 @@ require 'qt'
 
 WINDOW_W = 1020
 WINDOW_H = 700
-LEFT_BUTTON = 1
 LINE_H = 22
 OUTPUT_LINES = 24
 
@@ -62,7 +61,7 @@ buttons = button_specs.each_with_index.map do |spec, i|
   view.set_alignment(Qt::AlignCenter)
   view.set_style_sheet(BTN_STYLE)
   view.set_text(spec[:text])
-  spec.merge(view: view, x: 32, y: y, w: 188, h: 36)
+  spec.merge(view: view)
 end
 
 out_box = QLabel.new(window)
@@ -75,10 +74,6 @@ lines = Array.new(OUTPUT_LINES) do |i|
   line.set_style_sheet('background-color: #0f172a; color: #e2e8f0; border: 0px; font-size: 12px;')
   line.set_text('')
   line
-end
-
-inside = lambda do |x, y, bx, by, bw, bh|
-  x >= bx && x < bx + bw && y >= by && y < by + bh
 end
 
 set_output = lambda do |text|
@@ -151,28 +146,15 @@ set_output.call(boot_out)
 window.show
 QApplication.process_events
 
-prev_left_down = false
-
-loop do
-  QApplication.process_events
-  break if window.is_visible.zero?
-
-  mx = QApplication.mouse_x
-  my = QApplication.mouse_y
-  left_down = (QApplication.mouse_buttons & LEFT_BUTTON) != 0
-
-  lx = Qt::Native.qwidget_map_from_global_x(window.handle, mx, my)
-  ly = Qt::Native.qwidget_map_from_global_y(window.handle, mx, my)
-
-  if left_down && !prev_left_down
-    btn = buttons.find { |b| inside.call(lx, ly, b[:x], b[:y], b[:w], b[:h]) }
-    if btn
-      flash_button.call(btn)
-      act.call(btn[:key])
-    end
+buttons.each do |btn|
+  btn[:view].on(:mouse_button_release) do
+    flash_button.call(btn)
+    act.call(btn[:key])
   end
+end
 
-  prev_left_down = left_down
+while window.is_visible != 0
+  QApplication.process_events
   sleep(0.01)
 end
 
