@@ -581,57 +581,7 @@ end
 def generate_cpp_bridge(specs)
   lines = []
   required_includes.each { |inc| lines << "#include <#{inc}>" }
-  lines << '#include <QByteArray>'
-  lines << '#include <QString>'
-  lines << '#include "qt_ruby_runtime.hpp"'
-  lines << ''
-  lines << 'namespace {'
-  lines << ''
-  lines << 'QString as_qstring(const char* value, const char* fallback = "") {'
-  lines << '  if (!value) {'
-    lines << '    return QString::fromUtf8(fallback);'
-  lines << '  }'
-  lines << ''
-  lines << '  return QString::fromUtf8(value);'
-  lines << '}'
-  lines << '}  // namespace'
-  lines << ''
-  lines << 'extern "C" const char* qt_ruby_qt_version() {'
-  lines << '  return qVersion();'
-  lines << '}'
-  lines << ''
-  lines << 'extern "C" void qt_ruby_qapplication_process_events() {'
-  lines << '  QtRubyRuntime::qapplication_process_events();'
-  lines << '}'
-  lines << ''
-  lines << 'extern "C" int qt_ruby_qapplication_top_level_widgets_count() {'
-  lines << '  return QtRubyRuntime::qapplication_top_level_widgets_count();'
-  lines << '}'
-  lines << ''
-  lines << 'extern "C" void qt_ruby_set_event_callback(void* callback_ptr) {'
-  lines << '  QtRubyRuntime::set_event_callback(callback_ptr);'
-  lines << '}'
-  lines << ''
-  lines << 'extern "C" void qt_ruby_watch_qobject_event(void* object_handle, int event_type) {'
-  lines << '  QtRubyRuntime::watch_qobject_event(object_handle, event_type);'
-  lines << '}'
-  lines << ''
-  lines << 'extern "C" void qt_ruby_unwatch_qobject_event(void* object_handle, int event_type) {'
-  lines << '  QtRubyRuntime::unwatch_qobject_event(object_handle, event_type);'
-  lines << '}'
-  lines << ''
-  lines << 'extern "C" void qt_ruby_set_signal_callback(void* callback_ptr) {'
-  lines << '  QtRubyRuntime::set_signal_callback(callback_ptr);'
-  lines << '}'
-  lines << ''
-  lines << 'extern "C" int qt_ruby_qobject_connect_signal(void* object_handle, const char* signal_name) {'
-  lines << '  return QtRubyRuntime::qobject_connect_signal(object_handle, signal_name);'
-  lines << '}'
-  lines << ''
-  lines << 'extern "C" int qt_ruby_qobject_disconnect_signal(void* object_handle, const char* signal_name) {'
-  lines << '  return QtRubyRuntime::qobject_disconnect_signal(object_handle, signal_name);'
-  lines << '}'
-  lines << ''
+  append_block(lines, cpp_bridge_prelude)
 
   specs.each do |spec|
     generate_cpp_constructor(lines, spec)
@@ -645,6 +595,66 @@ def generate_cpp_bridge(specs)
 
   generate_cpp_delete(lines)
   lines.join("\n") + "\n"
+end
+
+def append_block(lines, block)
+  lines.concat(block.strip.split("\n"))
+  lines << ''
+end
+
+def cpp_bridge_prelude
+  <<~CPP
+    #include <QByteArray>
+    #include <QString>
+    #include "qt_ruby_runtime.hpp"
+
+    namespace {
+
+    QString as_qstring(const char* value, const char* fallback = "") {
+      if (!value) {
+        return QString::fromUtf8(fallback);
+      }
+
+      return QString::fromUtf8(value);
+    }
+    }  // namespace
+
+    extern "C" const char* qt_ruby_qt_version() {
+      return qVersion();
+    }
+
+    extern "C" void qt_ruby_qapplication_process_events() {
+      QtRubyRuntime::qapplication_process_events();
+    }
+
+    extern "C" int qt_ruby_qapplication_top_level_widgets_count() {
+      return QtRubyRuntime::qapplication_top_level_widgets_count();
+    }
+
+    extern "C" void qt_ruby_set_event_callback(void* callback_ptr) {
+      QtRubyRuntime::set_event_callback(callback_ptr);
+    }
+
+    extern "C" void qt_ruby_watch_qobject_event(void* object_handle, int event_type) {
+      QtRubyRuntime::watch_qobject_event(object_handle, event_type);
+    }
+
+    extern "C" void qt_ruby_unwatch_qobject_event(void* object_handle, int event_type) {
+      QtRubyRuntime::unwatch_qobject_event(object_handle, event_type);
+    }
+
+    extern "C" void qt_ruby_set_signal_callback(void* callback_ptr) {
+      QtRubyRuntime::set_signal_callback(callback_ptr);
+    }
+
+    extern "C" int qt_ruby_qobject_connect_signal(void* object_handle, const char* signal_name) {
+      return QtRubyRuntime::qobject_connect_signal(object_handle, signal_name);
+    }
+
+    extern "C" int qt_ruby_qobject_disconnect_signal(void* object_handle, const char* signal_name) {
+      return QtRubyRuntime::qobject_disconnect_signal(object_handle, signal_name);
+    }
+  CPP
 end
 
 def generate_bridge_api(specs)
@@ -710,51 +720,9 @@ def generate_ruby_qapplication(lines, spec)
 
   lines << '    end'
   lines << ''
-  lines << '    def initialize(_argc = 0, _argv = [])'
-  lines << '      @windows = []'
-  lines << '      @handle = Native.qapplication_new'
-  lines << '      self.class.current = self'
-  lines << '    end'
-  lines << ''
-  lines << '    def register_window(window)'
-  lines << '      @windows << window unless @windows.include?(window)'
-  lines << '    end'
-  lines << ''
-  lines << '    def exec'
-  lines << '      @windows.each(&:show)'
-  lines << '      Native.qapplication_exec(@handle)'
-  lines << '    ensure'
-  lines << '      dispose'
-  lines << '    end'
-  lines << ''
-  lines << '    def q_inspect'
-  lines << '      property_values = {}'
-  lines << '      self.class::QT_API_PROPERTIES.each do |property|'
-  lines << '        begin'
-  lines << '          property_values[property] = public_send(property)'
-  lines << '        rescue StandardError => e'
-  lines << '          property_values[property] = { error: e.class.name, message: e.message }'
-  lines << '        end'
-  lines << '      end'
-  lines << ''
-  lines << '      {'
-  lines << '        qt_class: self.class::QT_CLASS,'
-  lines << '        ruby_class: self.class.name,'
-  lines << '        handle: @handle,'
-  lines << '        qt_methods: self.class::QT_API_QT_METHODS,'
-  lines << '        ruby_methods: self.class::QT_API_RUBY_METHODS,'
-  lines << '        properties: property_values'
-  lines << '      }'
-  lines << '    end'
-  lines << '    alias_method :qt_inspect, :q_inspect'
-  lines << '    alias_method :to_h, :q_inspect'
-  lines << ''
-  lines << '    def dispose'
-  lines << '      return if @handle.nil? || (@handle.respond_to?(:null?) && @handle.null?)'
-  lines << ''
-  lines << '      Native.qapplication_delete(@handle)'
-  lines << '      @handle = nil'
-  lines << '    end'
+  append_block(lines, ruby_qapplication_instance_block)
+  append_qinspect_block(lines, indent: '    ')
+  append_block(lines, ruby_qapplication_dispose_block)
   lines << '  end'
   lines << ''
 end
@@ -822,28 +790,7 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
     lines << ''
   end
 
-  lines << '    def q_inspect'
-  lines << '      property_values = {}'
-  lines << '      self.class::QT_API_PROPERTIES.each do |property|'
-  lines << '        begin'
-  lines << '          property_values[property] = public_send(property)'
-  lines << '        rescue StandardError => e'
-  lines << '          property_values[property] = { error: e.class.name, message: e.message }'
-  lines << '        end'
-  lines << '      end'
-  lines << ''
-  lines << '      {'
-  lines << '        qt_class: self.class::QT_CLASS,'
-  lines << '        ruby_class: self.class.name,'
-  lines << '        handle: @handle,'
-  lines << '        qt_methods: self.class::QT_API_QT_METHODS,'
-  lines << '        ruby_methods: self.class::QT_API_RUBY_METHODS,'
-  lines << '        properties: property_values'
-  lines << '      }'
-  lines << '    end'
-  lines << '    alias_method :qt_inspect, :q_inspect'
-  lines << '    alias_method :to_h, :q_inspect'
-  lines << ''
+  append_qinspect_block(lines, indent: '    ')
   spec[:methods].each do |method|
     ruby_name = method[:ruby_name]
     snake_alias = to_snake(ruby_name)
@@ -868,6 +815,67 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
 
   lines << '  end'
   lines << ''
+end
+
+def append_qinspect_block(lines, indent:)
+  block = <<~RUBY
+    def q_inspect
+      property_values = {}
+      self.class::QT_API_PROPERTIES.each do |property|
+        begin
+          property_values[property] = public_send(property)
+        rescue StandardError => e
+          property_values[property] = { error: e.class.name, message: e.message }
+        end
+      end
+
+      {
+        qt_class: self.class::QT_CLASS,
+        ruby_class: self.class.name,
+        handle: @handle,
+        qt_methods: self.class::QT_API_QT_METHODS,
+        ruby_methods: self.class::QT_API_RUBY_METHODS,
+        properties: property_values
+      }
+    end
+    alias_method :qt_inspect, :q_inspect
+    alias_method :to_h, :q_inspect
+  RUBY
+
+  block.lines.each { |line| lines << "#{indent}#{line.rstrip}" }
+  lines << ''
+end
+
+def ruby_qapplication_instance_block
+  <<~RUBY
+    def initialize(_argc = 0, _argv = [])
+      @windows = []
+      @handle = Native.qapplication_new
+      self.class.current = self
+    end
+
+    def register_window(window)
+      @windows << window unless @windows.include?(window)
+    end
+
+    def exec
+      @windows.each(&:show)
+      Native.qapplication_exec(@handle)
+    ensure
+      dispose
+    end
+  RUBY
+end
+
+def ruby_qapplication_dispose_block
+  <<~RUBY
+    def dispose
+      return if @handle.nil? || (@handle.respond_to?(:null?) && @handle.null?)
+
+      Native.qapplication_delete(@handle)
+      @handle = nil
+    end
+  RUBY
 end
 
 def generate_ruby_widgets(specs, super_qt_by_qt, wrapper_qt_classes)
