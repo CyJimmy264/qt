@@ -237,22 +237,29 @@ trigger_action = lambda do |action|
   perform_action.call(action)
 end
 
+action_for_key = lambda do |key_code|
+  case key_code
+  when Qt::KeyLeft then :left
+  when Qt::KeyRight then :right
+  when Qt::KeyUp then :rotate
+  when Qt::KeyDown, Qt::KeySpace then :drop
+  when Qt::KeyN then :new
+  end
+end
+
+handle_key_event = lambda do |ev|
+  action = action_for_key.call(ev[:a])
+  trigger_action.call(action) if action
+end
+
 buttons.each do |btn|
   btn[:view].connect('clicked') do |_checked|
     trigger_action.call(btn[:key])
   end
+  btn[:view].on(:key_press) { |ev| handle_key_event.call(ev) }
 end
 
-window.on(:key_press) do |ev|
-  action = case ev[:a]
-           when Qt::KeyLeft then :left
-           when Qt::KeyRight then :right
-           when Qt::KeyUp then :rotate
-           when Qt::KeyDown, Qt::KeySpace then :drop
-           when Qt::KeyN then :new
-           end
-  trigger_action.call(action) if action
-end
+window.on(:key_press) { |ev| handle_key_event.call(ev) }
 
 restart.call
 window.show
