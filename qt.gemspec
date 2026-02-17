@@ -21,10 +21,10 @@ Gem::Specification.new do |spec|
     'Rakefile'
   ]
 
-  spec.extensions = ['ext/qt_ruby_ext/extconf.rb']
+  spec.extensions = ['ext/qt_ruby_bridge/extconf.rb']
   spec.require_paths = ['lib']
 
+  spec.add_dependency 'ffi', '~> 1.17'
   spec.add_development_dependency 'rake', '~> 13.0'
   spec.add_development_dependency 'minitest', '~> 5.20'
-  spec.add_development_dependency 'rake-compiler', '~> 1.2'
 end

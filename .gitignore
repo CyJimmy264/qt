@@ -13,6 +13,9 @@ ext/**/Makefile
 ext/**/mkmf.log
 ext/**/.sitearchdir.time
 ext/**/.sitelibdir.time
+ext/**/.sitearchdir.*
+ext/**/.sitelibdir.*
 
 # rake-compiler output
 tmp/
+build/

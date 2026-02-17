@@ -7,8 +7,8 @@
 This repository currently provides:
 
 - gem/project skeleton;
-- native C++ extension bridge to Qt;
-- minimal API to read Qt version and open a window.
+- native C ABI bridge to Qt (called from Ruby via `ffi`);
+- Ruby wrappers for `QApplication`, `QWidget`, `QLabel`.
 
 ## Requirements
 
@@ -23,6 +23,9 @@ bundle install
 bundle exec rake compile
 ```
 
+`rake compile` first generates the bridge from system Qt headers, then compiles it.
+All generated artifacts are written under `build/`.
+
 If Qt is installed in a custom location, expose it to `pkg-config`:
 
 ```bash
@@ -34,21 +37,36 @@ export PKG_CONFIG_PATH="/path/to/qt/lib/pkgconfig:$PKG_CONFIG_PATH"
 ```ruby
 require 'qt'
 
-app = Qt::Application.new(title: 'My App', width: 800, height: 600)
-puts Qt::Application.qt_version
-app.run
+app = QApplication.new(0, [])
+
+window = QWidget.new do |w|
+  w.setWindowTitle('Qt Ruby App')
+  w.resize(800, 600)
+end
+
+QLabel.new(window) do |l|
+  l.setText('Hello from Ruby')
+  l.setAlignment(Qt::AlignCenter)
+  l.setGeometry(0, 0, 800, 600)
+end
+
+app.exec
 ```
 
 Or run the example:
 
 ```bash
-ruby examples/hello_window.rb
+ruby examples/dsl_hello.rb
 ```
 
 ## Project layout
 
 - `lib/qt`: public Ruby API
-- `ext/qt_ruby_ext`: native Qt bridge
+- `scripts/generate_bridge.rb`: bridge generator (reads system Qt headers)
+- `scripts/specs/qt_widgets.rb`: declarative widget/API spec for generation
+- `ext/qt_ruby_bridge`: native extension build scripts
+- `build/generated`: generated C++ and Ruby bindings
+- `build/qt`: compiled native bridge (`qt_ruby_bridge.so`)
 - `examples`: runnable demos
 - `test`: Ruby-layer tests
 
