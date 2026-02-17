@@ -20,6 +20,12 @@ module Qt
       alias_method :on_signal, :connect
       alias_method :slot, :connect
 
+      def off(event_name = nil)
+        EventRuntime.off_event(self, event_name)
+        self
+      end
+      alias_method :off_event, :off
+
       def disconnect(signal_name = nil)
         EventRuntime.off_signal(self, signal_name)
         self
