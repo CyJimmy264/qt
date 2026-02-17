@@ -13,17 +13,9 @@ CPP_PATH = File.join(GENERATED_DIR, 'qt_ruby_bridge.cpp')
 API_PATH = File.join(GENERATED_DIR, 'bridge_api.rb')
 RUBY_WIDGETS_PATH = File.join(GENERATED_DIR, 'widgets.rb')
 
-# Universal generation policy: keep only class-selection/bootstrap in code.
-TARGET_QT_CLASSES = %w[
-  QWidget
-  QLabel
-  QPushButton
-  QLineEdit
-  QVBoxLayout
-  QTableWidget
-  QTableWidgetItem
-  QScrollArea
-].freeze
+# Universal generation policy: class set is discovered from AST per scope.
+GENERATOR_SCOPE = (ENV['QT_RUBY_SCOPE'] || 'widgets').freeze
+SUPPORTED_SCOPES = %w[widgets].freeze
 
 QAPPLICATION_SPEC = {
   qt_class: 'QApplication',
@@ -46,6 +38,8 @@ RUBY_RESERVED_WORDS = %w[
   for if in module next nil not or redo rescue retry return self super then true undef unless
   until when while yield __ENCODING__ __FILE__ __LINE__
 ].to_set.freeze
+RUNTIME_METHOD_RENAMES = { 'handle' => 'handle_at' }.freeze
+RUNTIME_RESERVED_RUBY_METHODS = Set['handle'].freeze
 
 def debug_enabled?
   ENV['QT_RUBY_GENERATOR_DEBUG'] == '1'
@@ -67,8 +61,13 @@ def timed(label)
   value
 end
 
-def required_includes
-  (['QApplication'] + TARGET_QT_CLASSES).uniq
+def required_includes(scope)
+  case scope
+  when 'widgets'
+    ['QApplication', 'QtWidgets']
+  else
+    raise "Unsupported QT_RUBY_SCOPE=#{scope.inspect}. Supported: #{SUPPORTED_SCOPES.join(', ')}"
+  end
 end
 
 def ffi_to_cpp_type(ffi)
@@ -103,6 +102,14 @@ end
 
 def ruby_safe_method_name(name)
   RUBY_RESERVED_WORDS.include?(name) ? "#{name}_" : name
+end
+
+def ruby_public_method_name(qt_name, explicit_name = nil)
+  base = explicit_name || qt_name
+  safe = ruby_safe_method_name(base)
+  return safe unless RUNTIME_RESERVED_RUBY_METHODS.include?(safe)
+
+  RUNTIME_METHOD_RENAMES.fetch(safe, "#{safe}_qt")
 end
 
 def ruby_safe_arg_name(name, index, used)
@@ -191,14 +198,14 @@ def ast_dump
   cflags = timed('pkg_config_cflags') { pkg_config_cflags }
 
   Tempfile.create(['qt_ruby_probe', '.cpp']) do |file|
-    required_includes.each { |inc| file.write("#include <#{inc}>\n") }
+    required_includes(GENERATOR_SCOPE).each { |inc| file.write("#include <#{inc}>\n") }
     file.flush
 
     cmd = "clang++ -std=c++17 -x c++ -Xclang -ast-dump=json -fsyntax-only #{cflags} #{file.path}"
     out = timed('clang_ast_dump') { `#{cmd}` }
     raise "clang AST dump failed: #{cmd}" unless $?.success?
 
-    timed('ast_json_parse') { JSON.parse(out) }
+    timed('ast_json_parse') { JSON.parse(out, max_nesting: false) }
   end
 end
 
@@ -266,6 +273,7 @@ def ast_class_index(ast)
   bases_by_class = Hash.new { |h, k| h[k] = [] }
   ctors_by_class = Hash.new { |h, k| h[k] = [] }
   ctor_decls_by_class = Hash.new { |h, k| h[k] = [] }
+  abstract_by_class = Hash.new(false)
   method_decl_count = 0
   ctor_decl_count = 0
 
@@ -275,6 +283,7 @@ def ast_class_index(ast)
 
       class_name = node['name']
       next if class_name.nil? || class_name.empty?
+      abstract_by_class[class_name] ||= node.dig('definitionData', 'isAbstract') == true
 
       Array(node['bases']).each do |base|
         type_info = base['type'] || {}
@@ -314,7 +323,8 @@ def ast_class_index(ast)
     methods_by_class: methods_by_class,
     bases_by_class: bases_by_class,
     ctors_by_class: ctors_by_class,
-    ctor_decls_by_class: ctor_decls_by_class
+    ctor_decls_by_class: ctor_decls_by_class,
+    abstract_by_class: abstract_by_class
   }
 end
 
@@ -341,7 +351,10 @@ def collect_method_decls_with_bases(ast, class_name, method_name, visited = {})
 end
 
 def map_cpp_arg_type(type_name, qt_class: nil, int_cast_types: nil)
-  type = type_name.to_s.strip
+  raw = type_name.to_s.strip
+  return nil if raw.end_with?('&') && !raw.start_with?('const ')
+
+  type = raw
   type = type.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
   return nil if type.include?('<') || type.include?('>') || type.include?('[') || type.include?('(')
 
@@ -351,6 +364,7 @@ def map_cpp_arg_type(type_name, qt_class: nil, int_cast_types: nil)
 
   if type.end_with?('*')
     base = type.sub(/\s*\*\z/, '').strip
+    base = "#{qt_class}::#{base}" if qt_class && !base.include?('::') && base.match?(/\A[A-Z]\w*\z/) && !base.start_with?('Q')
     return { ffi: :pointer, cast: "#{base}*" }
   end
 
@@ -434,7 +448,7 @@ def build_auto_method_from_decl(method_decl, entry, qt_class:, int_cast_types:)
 
   method = {
     qt_name: entry[:qt_name],
-    ruby_name: entry[:ruby_name] || entry[:qt_name],
+    ruby_name: ruby_public_method_name(entry[:qt_name], entry[:ruby_name]),
     ffi_return: ret_info[:ffi_return],
     args: args,
     required_arg_count: parsed[:required_arg_count]
@@ -610,6 +624,11 @@ def collect_constructor_decls(ast, class_name)
   Array(index[:ctor_decls_by_class][class_name])
 end
 
+def abstract_class?(ast, class_name)
+  index = ast_class_index(ast)
+  index[:abstract_by_class][class_name] == true
+end
+
 def class_inherits?(ast, class_name, ancestor, visited = {})
   return false if class_name.nil? || class_name.empty? || visited[class_name]
   return true if class_name == ancestor
@@ -633,10 +652,46 @@ def constructor_supports_parent_only?(decl)
   params.drop(1).all? { |param| param[:has_default] }
 end
 
+def constructor_supports_no_args?(decl)
+  return false unless decl['__effective_access'] == 'public'
+
+  parsed = parse_method_signature(decl)
+  return false unless parsed
+
+  parsed[:required_arg_count].zero?
+end
+
+def discover_target_qt_classes(ast, scope)
+  index = ast_class_index(ast)
+  all_classes = index[:methods_by_class].keys.select { |name| name.start_with?('Q') }.uniq
+
+  case scope
+  when 'widgets'
+    all_classes.select do |qt_class|
+      next false if qt_class.end_with?('Private')
+      next false if qt_class == 'QApplication'
+      next false if abstract_class?(ast, qt_class)
+
+      widget_related =
+        class_inherits?(ast, qt_class, 'QWidget') ||
+        class_inherits?(ast, qt_class, 'QLayout') ||
+        qt_class == 'QTableWidgetItem'
+      next false unless widget_related
+
+      ctor_decls = collect_constructor_decls(ast, qt_class)
+      ctor_decls.any? { |decl| constructor_supports_parent_only?(decl) || constructor_supports_no_args?(decl) }
+    end.sort
+  else
+    raise "Unsupported QT_RUBY_SCOPE=#{scope.inspect}. Supported: #{SUPPORTED_SCOPES.join(', ')}"
+  end
+end
+
 def build_base_specs(ast)
   specs = [QAPPLICATION_SPEC.dup]
+  target_qt_classes = discover_target_qt_classes(ast, GENERATOR_SCOPE)
+  debug_log("target_classes scope=#{GENERATOR_SCOPE} count=#{target_qt_classes.length}")
 
-  TARGET_QT_CLASSES.each do |qt_class|
+  target_qt_classes.each do |qt_class|
     ctor_decls = collect_constructor_decls(ast, qt_class)
     supports_parent = ctor_decls.any? { |decl| constructor_supports_parent_only?(decl) }
     parent_ctor = supports_parent
@@ -650,7 +705,6 @@ def build_base_specs(ast)
       constructor: parent_ctor ? { parent: true, parent_type: 'QWidget*', register_in_parent: widget_child } : { parent: false },
       methods: [],
       auto_methods: :all,
-      auto_method_rules: {},
       validate: { constructors: [qt_class], methods: [] }
     }
   end
@@ -893,7 +947,7 @@ end
 
 def generate_cpp_bridge(specs)
   lines = []
-  required_includes.each { |inc| lines << "#include <#{inc}>" }
+  required_includes(GENERATOR_SCOPE).each { |inc| lines << "#include <#{inc}>" }
   append_block(lines, cpp_bridge_prelude)
 
   specs.each do |spec|

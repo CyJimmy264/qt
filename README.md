@@ -117,6 +117,19 @@ window.window_title = 'Main 2'
 puts label.text
 ```
 
+## API Compatibility Notes
+
+Generated Ruby API is intentionally close to Qt API, but follows universal bridge policies.
+
+- `snake_case` aliases are generated for Qt camelCase methods.
+- Ruby keyword-safe renaming is applied when needed: `next` -> `next_`.
+- Default C++ arguments are surfaced as optional Ruby arguments.
+- Internal runtime name collisions are renamed consistently:
+  - Example: Qt `handle(int)` -> Ruby `handle_at(int)` (because `handle` is reserved for object pointer access).
+- Methods with unsupported signatures are skipped by policy:
+  - non-public, deprecated, operator/internal event hooks,
+  - non-FFI-safe argument/return types.
+
 ## Introspection
 
 Every generated object exposes API snapshot helpers:
