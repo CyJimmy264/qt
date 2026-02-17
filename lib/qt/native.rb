@@ -9,7 +9,12 @@ module Qt
 
     COERCERS = {
       string: ->(value) { value.to_s },
-      int: ->(value) { Integer(value) }
+      int: ->(value) { Integer(value) },
+      pointer: lambda { |value|
+        return nil if value.nil?
+
+        value.respond_to?(:handle) ? value.handle : value
+      }
     }.freeze
 
     module_function

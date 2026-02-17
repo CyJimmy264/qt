@@ -64,6 +64,17 @@ Or run the example:
 
 ```bash
 ruby examples/dsl_hello.rb
+ruby examples/live_console.rb
+ruby examples/live_layout_console.rb
+```
+
+Inside `live_layout_console.rb` IRB:
+
+```ruby
+add_label("Dynamic label")
+add_button("Dynamic button")
+remove_last
+gui { window.resize(900, 600) }
 ```
 
 ## Project layout

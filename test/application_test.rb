@@ -27,9 +27,22 @@ class QtBindingsTest < Minitest::Test
     app = QApplication.new(0, [])
     window = QWidget.new
     label = QLabel.new(window)
+    label.text = 'A'
 
     assert_equal 1, window.children.size
     assert_equal label, window.children.first
+    assert_equal 'A', label.text
+    assert_equal label.q_inspect, label.qt_inspect
+    assert_equal label.q_inspect, label.to_h
+    assert_equal 'QLabel', label.q_inspect[:qt_class]
+    assert_equal 'A', label.q_inspect.dig(:properties, :text)
+
+    layout = QVBoxLayout.new(window)
+    window.set_layout(layout)
+    button = QPushButton.new(window)
+    button.set_text('Click')
+    layout.add_widget(button)
+    layout.remove_widget(button)
   ensure
     app&.dispose
   end

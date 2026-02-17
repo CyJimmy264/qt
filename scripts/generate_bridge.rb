@@ -15,6 +15,10 @@ RUBY_WIDGETS_PATH = File.join(GENERATED_DIR, 'widgets.rb')
 
 CLASS_SPECS = QtRubyGenerator::Specs::CLASS_SPECS
 
+def required_includes
+  CLASS_SPECS.map { |spec| spec.fetch(:include) }.uniq
+end
+
 def ffi_to_cpp_type(ffi)
   case ffi
   when :pointer then 'void*'
@@ -40,6 +44,19 @@ def to_snake(name)
   name.gsub(/([a-z\d])([A-Z])/, '\\1_\\2').downcase
 end
 
+def lower_camel(name)
+  return name if name.empty?
+
+  name[0].downcase + name[1..]
+end
+
+def property_name_from_setter(qt_name)
+  return nil unless qt_name.start_with?('set')
+  return nil if qt_name.length <= 3
+
+  lower_camel(qt_name.delete_prefix('set'))
+end
+
 def ctor_function_name(spec)
   "qt_ruby_#{spec[:prefix]}_new"
 end
@@ -50,14 +67,16 @@ end
 
 def free_functions
   [
-    { name: 'qt_ruby_qt_version', ffi_return: :string, args: [] }
+    { name: 'qt_ruby_qt_version', ffi_return: :string, args: [] },
+    { name: 'qt_ruby_qapplication_process_events', ffi_return: :void, args: [] },
+    { name: 'qt_ruby_qapplication_top_level_widgets_count', ffi_return: :int, args: [] }
   ]
 end
 
-def all_ffi_functions
+def all_ffi_functions(specs)
   fns = free_functions.dup
 
-  CLASS_SPECS.each do |spec|
+  specs.each do |spec|
     ctor_args = spec[:constructor][:parent] ? [:pointer] : []
     fns << { name: ctor_function_name(spec), ffi_return: :pointer, args: ctor_args }
 
@@ -85,7 +104,7 @@ def ast_dump
   cflags = pkg_config_cflags
 
   Tempfile.create(['qt_ruby_probe', '.cpp']) do |file|
-    file.write("#include <QApplication>\n#include <QWidget>\n#include <QLabel>\n")
+    required_includes.each { |inc| file.write("#include <#{inc}>\n") }
     file.flush
 
     cmd = "clang++ -std=c++17 -x c++ -Xclang -ast-dump=json -fsyntax-only #{cflags} #{file.path}"
@@ -122,10 +141,42 @@ def collect_class_api(ast, class_name)
   { methods: methods.uniq, constructors: ctors.uniq }
 end
 
-def validate_qt_api!(ast)
+def class_has_method?(ast, class_name, method_name)
+  collect_class_api(ast, class_name)[:methods].include?(method_name)
+end
+
+def enrich_specs_with_properties(specs, ast)
+  specs.map do |spec|
+    methods = spec[:methods].dup
+
+    spec[:methods].each do |method|
+      next unless method[:args].length == 1
+
+      property = property_name_from_setter(method[:qt_name])
+      next unless property
+      next unless class_has_method?(ast, spec[:qt_class], property)
+      next if methods.any? { |m| m[:qt_name] == property }
+
+      arg = method[:args].first
+      getter = {
+        qt_name: property,
+        ruby_name: property,
+        ffi_return: arg[:ffi],
+        args: [],
+        property: property
+      }
+      getter[:return_cast] = :qstring_to_utf8 if arg[:ffi] == :string && arg[:cast] == :qstring
+      methods << getter
+    end
+
+    spec.merge(methods: methods)
+  end
+end
+
+def validate_qt_api!(ast, specs)
   errors = []
 
-  CLASS_SPECS.each do |spec|
+  specs.each do |spec|
     req = spec[:validate]
     api = collect_class_api(ast, spec[:qt_class])
 
@@ -147,6 +198,7 @@ def arg_expr(arg)
   case arg[:cast]
   when :qstring then "as_qstring(#{arg[:name]})"
   when :alignment then "static_cast<Qt::Alignment>(#{arg[:name]})"
+  when String then "static_cast<#{arg[:cast]}>(#{arg[:name]})"
   else
     arg[:name]
   end
@@ -189,7 +241,18 @@ def generate_cpp_method(lines, spec, method)
 
   lines << "extern \"C\" #{ret} #{fn}(#{sig.join(', ')}) {"
   lines << '  if (!handle) {'
-  lines << (method[:ffi_return] == :int ? '    return -1;' : '    return;')
+  lines << case method[:ffi_return]
+           when :void
+             '    return;'
+           when :int
+             '    return -1;'
+           when :pointer
+             '    return nullptr;'
+           when :string
+             '    return nullptr;'
+           else
+             '    return;'
+           end
   lines << '  }'
   lines << ''
   lines << "  auto* obj = static_cast<#{spec[:qt_class]}*>(handle);"
@@ -199,18 +262,23 @@ def generate_cpp_method(lines, spec, method)
 
   if method[:ffi_return] == :void
     lines << "  #{invocation};"
+  elsif method[:ffi_return] == :string && method[:return_cast] == :qstring_to_utf8
+    lines << "  const QString value = #{invocation};"
+    lines << '  thread_local QByteArray utf8;'
+    lines << '  utf8 = value.toUtf8();'
+    lines << '  return utf8.constData();'
   else
     lines << "  return #{invocation};"
   end
   lines << '}'
 end
 
-def generate_cpp_bridge
+def generate_cpp_bridge(specs)
   lines = []
-  lines << '#include <QApplication>'
-  lines << '#include <QLabel>'
+  required_includes.each { |inc| lines << "#include <#{inc}>" }
+  lines << '#include <QCoreApplication>'
+  lines << '#include <QByteArray>'
   lines << '#include <QString>'
-  lines << '#include <QWidget>'
   lines << ''
   lines << 'namespace {'
   lines << 'QString as_qstring(const char* value, const char* fallback = "") {'
@@ -226,8 +294,16 @@ def generate_cpp_bridge
   lines << '  return qVersion();'
   lines << '}'
   lines << ''
+  lines << 'extern "C" void qt_ruby_qapplication_process_events() {'
+  lines << '  QCoreApplication::processEvents();'
+  lines << '}'
+  lines << ''
+  lines << 'extern "C" int qt_ruby_qapplication_top_level_widgets_count() {'
+  lines << '  return QApplication::topLevelWidgets().size();'
+  lines << '}'
+  lines << ''
 
-  CLASS_SPECS.each do |spec|
+  specs.each do |spec|
     generate_cpp_constructor(lines, spec)
     lines << ''
 
@@ -241,14 +317,14 @@ def generate_cpp_bridge
   lines.join("\n") + "\n"
 end
 
-def generate_bridge_api
+def generate_bridge_api(specs)
   lines = []
   lines << '# frozen_string_literal: true'
   lines << ''
   lines << 'module Qt'
   lines << '  module BridgeAPI'
   lines << '    FUNCTIONS = ['
-  all_ffi_functions.each do |fn|
+  all_ffi_functions(specs).each do |fn|
     args = fn[:args].map { |arg| ":#{arg}" }.join(', ')
     lines << "      { name: :#{fn[:name]}, args: [#{args}], return: :#{fn[:ffi_return]} },"
   end
@@ -259,7 +335,20 @@ def generate_bridge_api
 end
 
 def generate_ruby_qapplication(lines, spec)
+  qt_method_names = spec[:methods].map { |method| method[:qt_name] }.uniq
+  ruby_method_names = spec[:methods].flat_map do |method|
+    ruby_name = method[:ruby_name]
+    snake = to_snake(ruby_name)
+    snake == ruby_name ? [ruby_name] : [ruby_name, snake]
+  end.uniq
+  properties = spec[:methods].filter_map { |method| method[:property] }.uniq
+
   lines << '  class QApplication'
+  lines << "    QT_CLASS = '#{spec[:qt_class]}'.freeze"
+  lines << "    QT_API_QT_METHODS = #{qt_method_names.inspect}.freeze"
+  lines << "    QT_API_RUBY_METHODS = #{ruby_method_names.map(&:to_sym).inspect}.freeze"
+  lines << "    QT_API_PROPERTIES = #{properties.map(&:to_sym).inspect}.freeze"
+  lines << ''
   lines << '    attr_reader :handle'
   lines << ''
   lines << '    class << self'
@@ -308,6 +397,28 @@ def generate_ruby_qapplication(lines, spec)
   lines << '      dispose'
   lines << '    end'
   lines << ''
+  lines << '    def q_inspect'
+  lines << '      property_values = {}'
+  lines << '      self.class::QT_API_PROPERTIES.each do |property|'
+  lines << '        begin'
+  lines << '          property_values[property] = public_send(property)'
+  lines << '        rescue StandardError => e'
+  lines << '          property_values[property] = { error: e.class.name, message: e.message }'
+  lines << '        end'
+  lines << '      end'
+  lines << ''
+  lines << '      {'
+  lines << '        qt_class: self.class::QT_CLASS,'
+  lines << '        ruby_class: self.class.name,'
+  lines << '        handle: @handle,'
+  lines << '        qt_methods: self.class::QT_API_QT_METHODS,'
+  lines << '        ruby_methods: self.class::QT_API_RUBY_METHODS,'
+  lines << '        properties: property_values'
+  lines << '      }'
+  lines << '    end'
+  lines << '    alias_method :qt_inspect, :q_inspect'
+  lines << '    alias_method :to_h, :q_inspect'
+  lines << ''
   lines << '    def dispose'
   lines << '      return if @handle.nil? || (@handle.respond_to?(:null?) && @handle.null?)'
   lines << ''
@@ -319,7 +430,20 @@ def generate_ruby_qapplication(lines, spec)
 end
 
 def generate_ruby_widget_class(lines, spec)
+  qt_method_names = spec[:methods].map { |method| method[:qt_name] }.uniq
+  ruby_method_names = spec[:methods].flat_map do |method|
+    ruby_name = method[:ruby_name]
+    snake = to_snake(ruby_name)
+    snake == ruby_name ? [ruby_name] : [ruby_name, snake]
+  end.uniq
+  properties = spec[:methods].filter_map { |method| method[:property] }.uniq
+
   lines << "  class #{spec[:ruby_class]}"
+  lines << "    QT_CLASS = '#{spec[:qt_class]}'.freeze"
+  lines << "    QT_API_QT_METHODS = #{qt_method_names.inspect}.freeze"
+  lines << "    QT_API_RUBY_METHODS = #{ruby_method_names.map(&:to_sym).inspect}.freeze"
+  lines << "    QT_API_PROPERTIES = #{properties.map(&:to_sym).inspect}.freeze"
+  lines << ''
   lines << '    attr_reader :handle'
   lines << '    attr_reader :children' if spec[:ruby_class] == 'QWidget'
   lines << ''
@@ -335,7 +459,7 @@ def generate_ruby_widget_class(lines, spec)
       lines << '        app = QApplication.current'
       lines << '        app&.register_window(self)'
       lines << '      end'
-    elsif spec[:ruby_class] == 'QLabel'
+    elsif spec[:constructor][:register_in_parent]
       lines << '      parent&.add_child(self)'
     end
   else
@@ -354,6 +478,29 @@ def generate_ruby_widget_class(lines, spec)
     lines << ''
   end
 
+  lines << '    def q_inspect'
+  lines << '      property_values = {}'
+  lines << '      self.class::QT_API_PROPERTIES.each do |property|'
+  lines << '        begin'
+  lines << '          property_values[property] = public_send(property)'
+  lines << '        rescue StandardError => e'
+  lines << '          property_values[property] = { error: e.class.name, message: e.message }'
+  lines << '        end'
+  lines << '      end'
+  lines << ''
+  lines << '      {'
+  lines << '        qt_class: self.class::QT_CLASS,'
+  lines << '        ruby_class: self.class.name,'
+  lines << '        handle: @handle,'
+  lines << '        qt_methods: self.class::QT_API_QT_METHODS,'
+  lines << '        ruby_methods: self.class::QT_API_RUBY_METHODS,'
+  lines << '        properties: property_values'
+  lines << '      }'
+  lines << '    end'
+  lines << '    alias_method :qt_inspect, :q_inspect'
+  lines << '    alias_method :to_h, :q_inspect'
+  lines << ''
+
   spec[:methods].each do |method|
     ruby_name = method[:ruby_name]
     snake_alias = to_snake(ruby_name)
@@ -363,6 +510,16 @@ def generate_ruby_widget_class(lines, spec)
     lines << "      Native.#{spec[:prefix]}_#{to_snake(method[:qt_name])}(#{call_args.join(', ')})"
     lines << '    end'
     lines << "    alias_method :#{snake_alias}, :#{ruby_name}" if snake_alias != ruby_name
+    if method[:property]
+      snake_property = to_snake(method[:property])
+      lines << "    def #{method[:property]}=(value)"
+      lines << "      set#{method[:property][0].upcase}#{method[:property][1..]}(value)"
+      lines << '    end'
+      if snake_property != method[:property]
+        lines << "    alias_method :#{snake_property}=, :#{method[:property]}="
+      end
+      lines << ''
+    end
     lines << ''
   end
 
@@ -370,16 +527,16 @@ def generate_ruby_widget_class(lines, spec)
   lines << ''
 end
 
-def generate_ruby_widgets
+def generate_ruby_widgets(specs)
   lines = []
   lines << '# frozen_string_literal: true'
   lines << ''
   lines << 'module Qt'
 
-  qapplication_spec = CLASS_SPECS.find { |spec| spec[:ruby_class] == 'QApplication' }
+  qapplication_spec = specs.find { |spec| spec[:ruby_class] == 'QApplication' }
   generate_ruby_qapplication(lines, qapplication_spec)
 
-  CLASS_SPECS.each do |spec|
+  specs.each do |spec|
     next if spec[:ruby_class] == 'QApplication'
 
     generate_ruby_widget_class(lines, spec)
@@ -390,14 +547,15 @@ def generate_ruby_widgets
 end
 
 ast = ast_dump
-validate_qt_api!(ast)
+validate_qt_api!(ast, CLASS_SPECS)
+effective_specs = enrich_specs_with_properties(CLASS_SPECS, ast)
 
 FileUtils.mkdir_p(File.dirname(CPP_PATH))
-File.write(CPP_PATH, generate_cpp_bridge)
+File.write(CPP_PATH, generate_cpp_bridge(effective_specs))
 FileUtils.mkdir_p(File.dirname(API_PATH))
-File.write(API_PATH, generate_bridge_api)
+File.write(API_PATH, generate_bridge_api(effective_specs))
 FileUtils.mkdir_p(File.dirname(RUBY_WIDGETS_PATH))
-File.write(RUBY_WIDGETS_PATH, generate_ruby_widgets)
+File.write(RUBY_WIDGETS_PATH, generate_ruby_widgets(effective_specs))
 
 puts "Generated #{CPP_PATH}"
 puts "Generated #{API_PATH}"

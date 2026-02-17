@@ -26,3 +26,5 @@ end
 ::QApplication = Qt::QApplication unless defined?(::QApplication)
 ::QWidget = Qt::QWidget unless defined?(::QWidget)
 ::QLabel = Qt::QLabel unless defined?(::QLabel)
+::QPushButton = Qt::QPushButton unless defined?(::QPushButton)
+::QVBoxLayout = Qt::QVBoxLayout unless defined?(::QVBoxLayout)
