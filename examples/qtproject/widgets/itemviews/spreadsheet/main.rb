@@ -147,7 +147,7 @@ recompute = lambda do
 end
 
 col_label = lambda do |col|
-  letters = ''
+  letters = +''
   n = col + 1
   while n.positive?
     n -= 1
