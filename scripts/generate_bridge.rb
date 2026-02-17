@@ -718,6 +718,30 @@ def append_ruby_property_writer(lines, method:, indent:)
   lines << "#{indent}alias_method :#{snake_property}=, :#{method[:property]}=" if snake_property != method[:property]
 end
 
+def append_widget_initializer(lines, spec:, widget_root:, indent:)
+  if spec[:constructor][:parent]
+    lines << "#{indent}def initialize(parent = nil)"
+    lines << "#{indent}  @handle = Native.#{spec[:prefix]}_new(parent&.handle)"
+    lines << "#{indent}  init_children_tracking!" if widget_root
+    if spec[:ruby_class] == 'QWidget'
+      lines << "#{indent}  if parent"
+      lines << "#{indent}    parent.add_child(self)"
+      lines << "#{indent}  else"
+      lines << "#{indent}    app = QApplication.current"
+      lines << "#{indent}    app&.register_window(self)"
+      lines << "#{indent}  end"
+    elsif spec[:constructor][:register_in_parent]
+      lines << "#{indent}  parent.add_child(self) if parent&.respond_to?(:add_child)"
+    end
+  else
+    lines << "#{indent}def initialize(_argc = 0, _argv = [])"
+    lines << "#{indent}  @handle = Native.#{spec[:prefix]}_new"
+  end
+
+  lines << "#{indent}  yield self if block_given?"
+  lines << "#{indent}end"
+end
+
 def generate_ruby_qapplication(lines, spec)
   metadata = ruby_api_metadata(spec[:methods])
 
@@ -785,28 +809,7 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
   lines << '    include ChildrenTracking' if widget_root
   lines << '    include EventRuntime::WidgetMethods' if widget_root
   lines << ''
-
-  if spec[:constructor][:parent]
-    lines << '    def initialize(parent = nil)'
-    lines << "      @handle = Native.#{spec[:prefix]}_new(parent&.handle)"
-    lines << '      init_children_tracking!' if widget_root
-    if spec[:ruby_class] == 'QWidget'
-      lines << '      if parent'
-      lines << '        parent.add_child(self)'
-      lines << '      else'
-      lines << '        app = QApplication.current'
-      lines << '        app&.register_window(self)'
-      lines << '      end'
-    elsif spec[:constructor][:register_in_parent]
-      lines << '      parent.add_child(self) if parent&.respond_to?(:add_child)'
-    end
-  else
-    lines << '    def initialize(_argc = 0, _argv = [])'
-    lines << "      @handle = Native.#{spec[:prefix]}_new"
-  end
-
-  lines << '      yield self if block_given?'
-  lines << '    end'
+  append_widget_initializer(lines, spec: spec, widget_root: widget_root, indent: '    ')
   lines << ''
 
   spec[:methods].each do |method|
