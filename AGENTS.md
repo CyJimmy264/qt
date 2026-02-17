@@ -8,6 +8,8 @@
 - No framework-level polling/hit-test event emulation in core. If polling is needed, it is app/example-level temporary logic only.
 - Do not pseudo-generate non-Qt-derived runtime logic (e.g., large handcrafted Ruby modules emitted as string templates).
 - If logic cannot be directly generated from Qt headers/metaobject data, keep it as regular Ruby source files in the repository (source-of-truth), not in generated artifacts.
+- Apply the same rule to C++: non-Qt-derived runtime logic must live in regular `*.cpp/*.h` source files in the repository, not as large `lines <<` string blocks in the generator.
+- Generator responsibility is wiring/composition of generated API plus stable source files, not embedding substantial handcrafted C++ runtime implementations inline.
 
 ## Architecture
 - Project is a Ruby-to-Qt bridge (`qt` gem name).
