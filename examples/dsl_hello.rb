@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+# $LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
 require 'qt'
 
 width = 640
@@ -13,7 +13,7 @@ window = QWidget.new do |w|
   w.resize(width, height)
 end
 
-QLabel.new(window) do |l|
+label = QLabel.new(window) do |l|
   l.setText('Hello from Ruby')
   l.setAlignment(Qt::AlignCenter)
   l.setGeometry(0, 0, width, height)

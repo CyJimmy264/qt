@@ -1,6 +1,6 @@
-# qt-ruby
+# qt
 
-`qt-ruby` is an early-stage Ruby GUI library built on top of Qt 6.10+.
+`qt` is an early-stage Ruby GUI bindings library built on top of Qt 6.10+.
 
 ## Status
 
@@ -21,6 +21,13 @@ This repository currently provides:
 ```bash
 bundle install
 bundle exec rake compile
+bundle exec rake install
+```
+
+For installed gem usage:
+
+```bash
+gem install qt
 ```
 
 `rake compile` first generates the bridge from system Qt headers, then compiles it.

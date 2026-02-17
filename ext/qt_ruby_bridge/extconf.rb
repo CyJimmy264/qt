@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'mkmf'
+require 'fileutils'
 
 PKG_CONFIG = RbConfig::CONFIG['PKG_CONFIG'] || 'pkg-config'
 QT_PACKAGES = %w[Qt6Core Qt6Gui Qt6Widgets].freeze
@@ -16,6 +17,15 @@ end
 
 unless find_executable(PKG_CONFIG)
   abort 'pkg-config is required to build qt-ruby bridge.'
+end
+
+generator = File.expand_path('../../scripts/generate_bridge.rb', __dir__)
+unless File.exist?(generator)
+  abort "Generator script not found: #{generator}"
+end
+
+unless system(RbConfig.ruby, generator)
+  abort 'Failed to generate Qt bridge files.'
 end
 
 missing = QT_PACKAGES.reject { |pkg| pkg_config('--exists', pkg) }
@@ -37,12 +47,17 @@ generated_cpp = if File.exist?('qt_ruby_bridge.cpp')
                   File.expand_path('../../build/generated/qt_ruby_bridge.cpp', __dir__)
                 end
 
-$CXXFLAGS = "#{$CXXFLAGS} #{cflags} -std=c++17"
-$LDFLAGS = "#{$LDFLAGS} #{libs}"
-$srcs = [generated_cpp]
-
 unless File.exist?(generated_cpp)
   abort "Generated source not found: #{generated_cpp}. Run: ruby scripts/generate_bridge.rb"
 end
+
+local_cpp = File.expand_path('qt_ruby_bridge.cpp')
+unless File.exist?(local_cpp) && File.identical?(generated_cpp, local_cpp)
+  FileUtils.cp(generated_cpp, local_cpp)
+end
+
+$CXXFLAGS = "#{$CXXFLAGS} #{cflags} -std=c++17"
+$LDFLAGS = "#{$LDFLAGS} #{libs}"
+$srcs = ['qt_ruby_bridge.cpp']
 
 create_makefile('qt/qt_ruby_bridge')
