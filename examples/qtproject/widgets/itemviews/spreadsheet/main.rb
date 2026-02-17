@@ -114,7 +114,13 @@ end
 
 COLS.times do |col|
   item = QTableWidgetItem.new
-  value = (col.zero? ? 'Total:' : '')
+  value = if col.zero?
+            'Total:'
+          elsif col == 5
+            '0'
+          else
+            'None'
+          end
   item.set_text(value)
   item.set_text_alignment(Qt::AlignCenter)
   sheet.set_item(TOTAL_ROW, col, item)
@@ -170,18 +176,25 @@ flash = lambda do |button|
   button.set_style_sheet(BTN)
 end
 
-apply_btn.connect('clicked') do
+apply_current_cell = lambda do
   row = sheet.current_row
   col = sheet.current_column
-  next if row.negative? || col.negative?
+  return if row.negative? || col.negative?
 
   item = matrix[row][col]
-  next unless item
+  return unless item
 
-  flash.call(apply_btn)
   item.set_text(formula.text.to_s)
   recompute.call
+  sync_formula_with_current.call
 end
+
+apply_btn.connect('clicked') do
+  flash.call(apply_btn)
+  apply_current_cell.call
+end
+
+formula.connect('returnPressed') { apply_current_cell.call }
 
 recalc_btn.connect('clicked') do
   flash.call(recalc_btn)
