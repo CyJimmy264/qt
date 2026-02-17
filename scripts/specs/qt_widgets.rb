@@ -108,6 +108,12 @@ module QtRubyGenerator
             ruby_name: 'setText',
             ffi_return: :void,
             args: [{ name: 'text', ffi: :string, cast: :qstring }]
+          },
+          {
+            qt_name: 'click',
+            ruby_name: 'click',
+            ffi_return: :void,
+            args: []
           }
         ],
         validate: { constructors: ['QPushButton'], methods: [] }

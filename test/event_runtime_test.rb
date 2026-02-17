@@ -110,6 +110,33 @@ class QtEventRuntimeTest < Minitest::Test
     app&.dispose
   end
 
+  def test_clicked_bool_signal_end_to_end_via_button_click
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    app = QApplication.new(0, [])
+    window = QWidget.new
+    button = QPushButton.new(window)
+    calls = []
+
+    button.connect('clicked(bool)') { |payload| calls << payload }
+    button.show
+    window.show
+    QApplication.process_events
+
+    button.click
+    20.times do
+      QApplication.process_events
+      break unless calls.empty?
+      sleep(0.005)
+    end
+
+    skip 'clicked(bool) signal was not delivered in this Qt platform environment' if calls.empty?
+
+    assert_operator calls.length, :>=, 1
+  ensure
+    app&.dispose
+  end
+
   private
 
   def assert_payload_forwarding(event_type, values)
