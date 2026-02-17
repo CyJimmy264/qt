@@ -70,22 +70,6 @@ module Qt
       @bridge_wrappers_defined = true
     end
 
-    def on_event(widget, event_name, &block)
-      Qt::EventRuntime.on_event(widget, event_name, &block)
-    end
-
-    def on_signal(widget, signal_name, &block)
-      Qt::EventRuntime.on_signal(widget, signal_name, &block)
-    end
-
-    def off_signal(widget, signal_name = nil)
-      Qt::EventRuntime.off_signal(widget, signal_name)
-    end
-
-    def off_event(widget, event_name = nil)
-      Qt::EventRuntime.off_event(widget, event_name)
-    end
-
     define_bridge_wrappers!
   end
 end
