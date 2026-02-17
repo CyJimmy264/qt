@@ -674,20 +674,55 @@ def generate_bridge_api(specs)
   lines.join("\n") + "\n"
 end
 
-def generate_ruby_qapplication(lines, spec)
-  qt_method_names = spec[:methods].map { |method| method[:qt_name] }.uniq
-  ruby_method_names = spec[:methods].flat_map do |method|
+def ruby_api_metadata(methods)
+  qt_method_names = methods.map { |method| method[:qt_name] }.uniq
+  ruby_method_names = methods.flat_map do |method|
     ruby_name = method[:ruby_name]
     snake = to_snake(ruby_name)
     snake == ruby_name ? [ruby_name] : [ruby_name, snake]
   end.uniq
-  properties = spec[:methods].filter_map { |method| method[:property] }.uniq
+  properties = methods.filter_map { |method| method[:property] }.uniq
+
+  {
+    qt_method_names: qt_method_names,
+    ruby_method_names: ruby_method_names,
+    properties: properties
+  }
+end
+
+def append_ruby_class_api_constants(lines, qt_class:, metadata:, indent:)
+  lines << "#{indent}QT_CLASS = '#{qt_class}'.freeze"
+  lines << "#{indent}QT_API_QT_METHODS = #{metadata[:qt_method_names].inspect}.freeze"
+  lines << "#{indent}QT_API_RUBY_METHODS = #{metadata[:ruby_method_names].map(&:to_sym).inspect}.freeze"
+  lines << "#{indent}QT_API_PROPERTIES = #{metadata[:properties].map(&:to_sym).inspect}.freeze"
+end
+
+def append_ruby_native_call_method(lines, method:, native_call:, indent:)
+  ruby_name = method[:ruby_name]
+  snake_alias = to_snake(ruby_name)
+  ruby_args = method[:args].map { |arg| arg[:name] }.join(', ')
+
+  lines << "#{indent}def #{ruby_name}(#{ruby_args})"
+  lines << "#{indent}  #{native_call}"
+  lines << "#{indent}end"
+  lines << "#{indent}alias_method :#{snake_alias}, :#{ruby_name}" if snake_alias != ruby_name
+end
+
+def append_ruby_property_writer(lines, method:, indent:)
+  return unless method[:property]
+
+  snake_property = to_snake(method[:property])
+  lines << "#{indent}def #{method[:property]}=(value)"
+  lines << "#{indent}  set#{method[:property][0].upcase}#{method[:property][1..]}(value)"
+  lines << "#{indent}end"
+  lines << "#{indent}alias_method :#{snake_property}=, :#{method[:property]}=" if snake_property != method[:property]
+end
+
+def generate_ruby_qapplication(lines, spec)
+  metadata = ruby_api_metadata(spec[:methods])
 
   lines << '  class QApplication'
-  lines << "    QT_CLASS = '#{spec[:qt_class]}'.freeze"
-  lines << "    QT_API_QT_METHODS = #{qt_method_names.inspect}.freeze"
-  lines << "    QT_API_RUBY_METHODS = #{ruby_method_names.map(&:to_sym).inspect}.freeze"
-  lines << "    QT_API_PROPERTIES = #{properties.map(&:to_sym).inspect}.freeze"
+  append_ruby_class_api_constants(lines, qt_class: spec[:qt_class], metadata: metadata, indent: '    ')
   lines << ''
   lines << '    attr_reader :handle'
   lines << '    include Inspectable'
@@ -730,14 +765,7 @@ end
 def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_ruby)
   inherited_methods = inherited_methods_for_spec(spec, specs_by_qt, super_qt_by_qt)
   all_methods = (inherited_methods + spec[:methods]).uniq { |m| m[:qt_name] }
-
-  qt_method_names = all_methods.map { |method| method[:qt_name] }.uniq
-  ruby_method_names = all_methods.flat_map do |method|
-    ruby_name = method[:ruby_name]
-    snake = to_snake(ruby_name)
-    snake == ruby_name ? [ruby_name] : [ruby_name, snake]
-  end.uniq
-  properties = all_methods.filter_map { |method| method[:property] }.uniq
+  metadata = ruby_api_metadata(all_methods)
 
   super_qt = super_qt_by_qt[spec[:qt_class]]
   super_ruby = super_qt ? qt_to_ruby[super_qt] : nil
@@ -750,10 +778,7 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
                  "  class #{spec[:ruby_class]}"
                end
   lines << class_decl
-  lines << "    QT_CLASS = '#{spec[:qt_class]}'.freeze"
-  lines << "    QT_API_QT_METHODS = #{qt_method_names.inspect}.freeze"
-  lines << "    QT_API_RUBY_METHODS = #{ruby_method_names.map(&:to_sym).inspect}.freeze"
-  lines << "    QT_API_PROPERTIES = #{properties.map(&:to_sym).inspect}.freeze"
+  append_ruby_class_api_constants(lines, qt_class: spec[:qt_class], metadata: metadata, indent: '    ')
   lines << ''
   lines << '    attr_reader :handle'
   lines << '    attr_reader :children' if widget_root
@@ -786,24 +811,10 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
   lines << ''
 
   spec[:methods].each do |method|
-    ruby_name = method[:ruby_name]
-    snake_alias = to_snake(ruby_name)
-    ruby_args = method[:args].map { |arg| arg[:name] }.join(', ')
-    lines << "    def #{ruby_name}(#{ruby_args})"
     call_args = ['@handle'] + method[:args].map { |arg| arg[:name] }
-    lines << "      Native.#{spec[:prefix]}_#{to_snake(method[:qt_name])}(#{call_args.join(', ')})"
-    lines << '    end'
-    lines << "    alias_method :#{snake_alias}, :#{ruby_name}" if snake_alias != ruby_name
-    if method[:property]
-      snake_property = to_snake(method[:property])
-      lines << "    def #{method[:property]}=(value)"
-      lines << "      set#{method[:property][0].upcase}#{method[:property][1..]}(value)"
-      lines << '    end'
-      if snake_property != method[:property]
-        lines << "    alias_method :#{snake_property}=, :#{method[:property]}="
-      end
-      lines << ''
-    end
+    native_call = "Native.#{spec[:prefix]}_#{to_snake(method[:qt_name])}(#{call_args.join(', ')})"
+    append_ruby_native_call_method(lines, method: method, native_call: native_call, indent: '    ')
+    append_ruby_property_writer(lines, method: method, indent: '    ')
     lines << ''
   end
 
