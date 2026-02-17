@@ -21,6 +21,8 @@
 - Build flow:
   - `ruby scripts/generate_bridge.rb`
   - `bundle exec rake compile`
+  - Verification flow is strictly sequential: never run `compile` and `test` in parallel.
+  - Always run `bundle exec rake compile` first, then `bundle exec rake test`.
 
 ## Inheritance Model
 - Ruby classes are generated with Qt-based inheritance derived from AST.

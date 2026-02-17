@@ -26,21 +26,7 @@ module QtRubyGenerator
         prefix: 'qwidget',
         constructor: { parent: true, parent_type: 'QWidget*' },
         methods: [],
-        auto_methods: [
-          { qt_name: 'setWindowTitle', param_count: 1 },
-          { qt_name: 'resize', param_count: 2 },
-          { qt_name: 'setLayout', param_count: 1 },
-          { qt_name: 'setGeometry', param_count: 4 },
-          { qt_name: 'setStyleSheet', param_count: 1 },
-          { qt_name: 'setFocusPolicy', param_count: 1 },
-          { qt_name: 'show', param_count: 0 },
-          { qt_name: 'hide', param_count: 0 },
-          { qt_name: 'isVisible', param_count: 0 },
-          { qt_name: 'x', param_count: 0 },
-          { qt_name: 'y', param_count: 0 },
-          { qt_name: 'width', param_count: 0 },
-          { qt_name: 'height', param_count: 0 }
-        ],
+        auto_methods: :all,
         validate: { constructors: ['QWidget'], methods: ['setWindowTitle', 'resize', 'setLayout', 'setGeometry', 'setStyleSheet', 'show', 'hide', 'isVisible', 'x', 'y', 'width', 'height'] }
       },
       {
@@ -50,10 +36,7 @@ module QtRubyGenerator
         prefix: 'qlabel',
         constructor: { parent: true, parent_type: 'QWidget*', register_in_parent: true },
         methods: [],
-        auto_methods: [
-          { qt_name: 'setText', param_count: 1 },
-          { qt_name: 'setAlignment', param_count: 1, param_types: ['Qt::Alignment'] }
-        ],
+        auto_methods: :all,
         validate: { constructors: ['QLabel'], methods: ['setText', 'setAlignment'] }
       },
       {
@@ -63,10 +46,7 @@ module QtRubyGenerator
         prefix: 'qpush_button',
         constructor: { parent: true, parent_type: 'QWidget*', register_in_parent: true },
         methods: [],
-        auto_methods: [
-          { qt_name: 'setText', param_count: 1 },
-          { qt_name: 'click', param_count: 0 }
-        ],
+        auto_methods: :all,
         validate: { constructors: ['QPushButton'], methods: [] }
       },
       {
@@ -76,10 +56,7 @@ module QtRubyGenerator
         prefix: 'qline_edit',
         constructor: { parent: true, parent_type: 'QWidget*', register_in_parent: true },
         methods: [],
-        auto_methods: [
-          { qt_name: 'setText', param_count: 1 },
-          { qt_name: 'setPlaceholderText', param_count: 1 }
-        ],
+        auto_methods: :all,
         validate: { constructors: ['QLineEdit'], methods: [] }
       },
       {
@@ -89,10 +66,10 @@ module QtRubyGenerator
         prefix: 'qvbox_layout',
         constructor: { parent: true, parent_type: 'QWidget*', register_in_parent: false },
         methods: [],
-        auto_methods: [
-          { qt_name: 'addWidget', param_count: 1 },
-          { qt_name: 'removeWidget', param_count: 1 }
-        ],
+        auto_methods: :all,
+        auto_method_rules: {
+          addWidget: { param_count: 3, arg_casts: [nil, nil, 'Qt::Alignment'] }
+        },
         validate: { constructors: ['QVBoxLayout'], methods: [] }
       },
       {
@@ -102,22 +79,11 @@ module QtRubyGenerator
         prefix: 'qtable_widget',
         constructor: { parent: true, parent_type: 'QWidget*', register_in_parent: true },
         methods: [],
-        auto_methods: [
-          { qt_name: 'setColumnCount', param_count: 1 },
-          { qt_name: 'setRowCount', param_count: 1 },
-          { qt_name: 'setColumnWidth', param_count: 2 },
-          { qt_name: 'setRowHeight', param_count: 2 },
-          { qt_name: 'setVerticalScrollMode', param_count: 1, arg_casts: ['QAbstractItemView::ScrollMode'] },
-          { qt_name: 'setHorizontalScrollBarPolicy', param_count: 1 },
-          { qt_name: 'setHorizontalHeaderItem', param_count: 2 },
-          { qt_name: 'setItem', param_count: 3 },
-          { qt_name: 'item', param_count: 2 },
-          { qt_name: 'setCurrentCell', param_count: 2 },
-          { qt_name: 'currentRow', param_count: 0 },
-          { qt_name: 'currentColumn', param_count: 0 },
-          { qt_name: 'clearContents', param_count: 0 },
-          { qt_name: 'setCellWidget', param_count: 3 }
-        ],
+        auto_methods: :all,
+        auto_method_rules: {
+          setVerticalScrollMode: { param_count: 1, arg_casts: ['QAbstractItemView::ScrollMode'] },
+          setTextAlignment: { param_count: 1, param_types: ['Qt::Alignment'] }
+        },
         validate: { constructors: ['QTableWidget'], methods: [] }
       },
       {
@@ -127,11 +93,10 @@ module QtRubyGenerator
         prefix: 'qtable_widget_item',
         constructor: { parent: false },
         methods: [],
-        auto_methods: [
-          { qt_name: 'setText', param_count: 1 },
-          { qt_name: 'text', param_count: 0 },
-          { qt_name: 'setTextAlignment', param_count: 1, param_types: ['Qt::Alignment'] }
-        ],
+        auto_methods: :all,
+        auto_method_rules: {
+          setTextAlignment: { param_count: 1, param_types: ['Qt::Alignment'] }
+        },
         validate: { constructors: ['QTableWidgetItem'], methods: [] }
       },
       {
@@ -141,10 +106,7 @@ module QtRubyGenerator
         prefix: 'qscroll_area',
         constructor: { parent: true, parent_type: 'QWidget*', register_in_parent: true },
         methods: [],
-        auto_methods: [
-          { qt_name: 'setWidgetResizable', param_count: 1 },
-          { qt_name: 'setWidget', param_count: 1 }
-        ],
+        auto_methods: :all,
         validate: { constructors: ['QScrollArea'], methods: [] }
       }
     ].freeze

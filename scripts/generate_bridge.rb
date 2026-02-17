@@ -15,6 +15,31 @@ API_PATH = File.join(GENERATED_DIR, 'bridge_api.rb')
 RUBY_WIDGETS_PATH = File.join(GENERATED_DIR, 'widgets.rb')
 
 CLASS_SPECS = QtRubyGenerator::Specs::CLASS_SPECS
+RUBY_RESERVED_WORDS = %w[
+  BEGIN END alias and begin break case class def defined? do else elsif end ensure false
+  for if in module next nil not or redo rescue retry return self super then true undef unless
+  until when while yield __ENCODING__ __FILE__ __LINE__
+].to_set.freeze
+
+def debug_enabled?
+  ENV['QT_RUBY_GENERATOR_DEBUG'] == '1'
+end
+
+def monotonic_now
+  Process.clock_gettime(Process::CLOCK_MONOTONIC)
+end
+
+def debug_log(message)
+  puts "[gen] #{message}" if debug_enabled?
+end
+
+def timed(label)
+  start = monotonic_now
+  value = yield
+  elapsed = monotonic_now - start
+  debug_log("#{label}=#{format('%.3fs', elapsed)}")
+  value
+end
 
 def required_includes
   CLASS_SPECS.map { |spec| spec.fetch(:include) }.uniq
@@ -43,6 +68,30 @@ end
 
 def to_snake(name)
   name.gsub(/([a-z\d])([A-Z])/, '\\1_\\2').downcase
+end
+
+def ruby_safe_method_name(name)
+  RUBY_RESERVED_WORDS.include?(name) ? "#{name}_" : name
+end
+
+def ruby_safe_arg_name(name, index, used)
+  base = name.to_s
+  base = "arg#{index + 1}" unless base.match?(/\A[A-Za-z_]\w*\z/)
+  base = "#{base}_arg" if RUBY_RESERVED_WORDS.include?(base)
+
+  candidate = base
+  counter = 2
+  while used.include?(candidate)
+    candidate = "#{base}_#{counter}"
+    counter += 1
+  end
+  used << candidate
+  candidate
+end
+
+def ruby_arg_name_map(args)
+  used = Set.new
+  args.each_with_index.to_h { |arg, idx| [arg[:name], ruby_safe_arg_name(arg[:name], idx, used)] }
 end
 
 def lower_camel(name)
@@ -108,17 +157,17 @@ def pkg_config_cflags
 end
 
 def ast_dump
-  cflags = pkg_config_cflags
+  cflags = timed('pkg_config_cflags') { pkg_config_cflags }
 
   Tempfile.create(['qt_ruby_probe', '.cpp']) do |file|
     required_includes.each { |inc| file.write("#include <#{inc}>\n") }
     file.flush
 
     cmd = "clang++ -std=c++17 -x c++ -Xclang -ast-dump=json -fsyntax-only #{cflags} #{file.path}"
-    out = `#{cmd}`
+    out = timed('clang_ast_dump') { `#{cmd}` }
     raise "clang AST dump failed: #{cmd}" unless $?.success?
 
-    JSON.parse(out)
+    timed('ast_json_parse') { JSON.parse(out) }
   end
 end
 
@@ -130,22 +179,10 @@ def walk_ast(node, &block)
 end
 
 def collect_class_api(ast, class_name)
-  methods = []
-  ctors = []
-
-  walk_ast(ast) do |node|
-    next unless node['kind'] == 'CXXRecordDecl'
-    next unless node['name'] == class_name
-
-    Array(node['inner']).each do |inner|
-      case inner['kind']
-      when 'CXXMethodDecl' then methods << inner['name'] if inner['name']
-      when 'CXXConstructorDecl' then ctors << inner['name'] if inner['name']
-      end
-    end
-  end
-
-  { methods: methods.uniq, constructors: ctors.uniq }
+  index = ast_class_index(ast)
+  methods = index[:methods_by_class].fetch(class_name, {}).keys
+  ctors = index[:ctors_by_class].fetch(class_name, [])
+  { methods: methods, constructors: ctors }
 end
 
 def ast_class_index(ast)
@@ -155,33 +192,54 @@ def ast_class_index(ast)
 
   methods_by_class = Hash.new { |h, k| h[k] = Hash.new { |h2, k2| h2[k2] = [] } }
   bases_by_class = Hash.new { |h, k| h[k] = [] }
+  ctors_by_class = Hash.new { |h, k| h[k] = [] }
+  method_decl_count = 0
+  ctor_decl_count = 0
 
-  walk_ast(ast) do |node|
-    next unless node['kind'] == 'CXXRecordDecl'
+  timed('ast_class_index_build') do
+    walk_ast(ast) do |node|
+      next unless node['kind'] == 'CXXRecordDecl'
 
-    class_name = node['name']
-    next if class_name.nil? || class_name.empty?
+      class_name = node['name']
+      next if class_name.nil? || class_name.empty?
 
-    Array(node['bases']).each do |base|
-      type_info = base['type'] || {}
-      raw = type_info['desugaredQualType'] || type_info['qualType']
-      parsed_base = normalize_cpp_type_name(raw)
-      bases_by_class[class_name] << parsed_base if parsed_base && !parsed_base.empty?
-    end
+      Array(node['bases']).each do |base|
+        type_info = base['type'] || {}
+        raw = type_info['desugaredQualType'] || type_info['qualType']
+        parsed_base = normalize_cpp_type_name(raw)
+        bases_by_class[class_name] << parsed_base if parsed_base && !parsed_base.empty?
+      end
 
-    Array(node['inner']).each do |inner|
-      next unless inner['kind'] == 'CXXMethodDecl'
-      next unless inner['name']
+      current_access = node['tagUsed'] == 'struct' ? 'public' : 'private'
+      Array(node['inner']).each do |inner|
+        case inner['kind']
+        when 'AccessSpecDecl'
+          current_access = inner['access'] if inner['access']
+        when 'CXXMethodDecl'
+          next unless inner['name']
 
-      methods_by_class[class_name][inner['name']] << inner
+          access = inner['access'] || current_access
+          methods_by_class[class_name][inner['name']] << inner.merge('__effective_access' => access)
+          method_decl_count += 1
+        when 'CXXConstructorDecl'
+          next unless inner['name']
+
+          ctors_by_class[class_name] << inner['name']
+          ctor_decl_count += 1
+        end
+      end
     end
   end
 
   bases_by_class.each_value(&:uniq!)
+  ctors_by_class.each_value(&:uniq!)
+  debug_log("ast_class_index classes=#{methods_by_class.length} method_decls=#{method_decl_count}")
+  debug_log("ast_class_index ctor_decls=#{ctor_decl_count}")
 
   @ast_class_index_cache[ast.object_id] = {
     methods_by_class: methods_by_class,
-    bases_by_class: bases_by_class
+    bases_by_class: bases_by_class,
+    ctors_by_class: ctors_by_class
   }
 end
 
@@ -194,7 +252,10 @@ def collect_method_decls_with_bases(ast, class_name, method_name, visited = {})
   return [] if class_name.nil? || class_name.empty? || visited[class_name]
 
   visited[class_name] = true
-  all = collect_method_decls(ast, class_name, method_name)
+  own = collect_method_decls(ast, class_name, method_name)
+  return own unless own.empty?
+
+  all = []
 
   bases = collect_class_bases(ast, class_name)
   bases.each do |base|
@@ -204,9 +265,10 @@ def collect_method_decls_with_bases(ast, class_name, method_name, visited = {})
   all
 end
 
-def map_cpp_arg_type(type_name)
+def map_cpp_arg_type(type_name, qt_class: nil)
   type = type_name.to_s.strip
   type = type.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
+  return nil if type.include?('<') || type.include?('>') || type.include?('[') || type.include?('(')
 
   if type == 'QString'
     return { ffi: :string, cast: :qstring }
@@ -223,9 +285,6 @@ def map_cpp_arg_type(type_name)
   when 'bool'
     { ffi: :int, cast: 'bool' }
   else
-    return { ffi: :int, cast: type } if type.include?('::')
-    return { ffi: :int, cast: type } if type.match?(/\A[A-Z]\w*\z/)
-
     nil
   end
 end
@@ -238,8 +297,11 @@ def normalized_cpp_type_name(type_name)
 end
 
 def map_cpp_return_type(type_name)
-  type = type_name.to_s.strip
-  type = type.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
+  raw = type_name.to_s.strip
+  return nil if raw.include?('<') || raw.include?('>') || raw.include?('[') || raw.include?('(')
+  return nil if raw.start_with?('const ') && raw.end_with?('*')
+
+  type = raw.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
 
   return { ffi_return: :void } if type == 'void'
   return { ffi_return: :int } if type == 'int'
@@ -257,15 +319,17 @@ def parse_method_signature(method_decl)
 
   ret = md[1].strip
   params = Array(method_decl['inner']).select { |x| x['kind'] == 'ParmVarDecl' }
+  required_arg_count = params.count { |param| param['init'].nil? }
   {
     return_type: ret,
+    required_arg_count: required_arg_count,
     params: params.each_with_index.map do |param, idx|
-      { name: (param['name'] || "arg#{idx + 1}"), type: param.dig('type', 'qualType').to_s }
+      { name: (param['name'] || "arg#{idx + 1}"), type: param.dig('type', 'qualType').to_s, has_default: !param['init'].nil? }
     end
   }
 end
 
-def build_auto_method_from_decl(method_decl, entry)
+def build_auto_method_from_decl(method_decl, entry, qt_class:)
   parsed = parse_method_signature(method_decl)
   return nil unless parsed
 
@@ -274,11 +338,13 @@ def build_auto_method_from_decl(method_decl, entry)
 
   arg_cast_overrides = Array(entry[:arg_casts])
   args = parsed[:params].each_with_index.map do |param, idx|
-    arg_info = map_cpp_arg_type(param[:type])
+    cast_override = arg_cast_overrides[idx]
+    arg_info = map_cpp_arg_type(param[:type], qt_class: qt_class)
+    arg_info ||= { ffi: :int } if cast_override
     return nil unless arg_info
 
     arg_hash = { name: param[:name], ffi: arg_info[:ffi] }
-    cast = arg_cast_overrides[idx] || arg_info[:cast]
+    cast = cast_override || arg_info[:cast]
     arg_hash[:cast] = cast if cast
     arg_hash
   end
@@ -287,23 +353,75 @@ def build_auto_method_from_decl(method_decl, entry)
     qt_name: entry[:qt_name],
     ruby_name: entry[:ruby_name] || entry[:qt_name],
     ffi_return: ret_info[:ffi_return],
-    args: args
+    args: args,
+    required_arg_count: parsed[:required_arg_count]
   }
   method[:return_cast] = ret_info[:return_cast] if ret_info[:return_cast]
   method
 end
 
+def auto_exportable_method_name?(name)
+  return false if name.nil? || name.empty?
+  return false if name.start_with?('~')
+  return false if name.include?('operator')
+  return false unless name.match?(/\A[A-Za-z_]\w*\z/)
+  return false if name.end_with?('Event')
+  return false if %w[event eventFilter childEvent customEvent timerEvent connectNotify disconnectNotify d_func connect disconnect].include?(name)
+
+  true
+end
+
+def deprecated_method_decl?(decl)
+  Array(decl['inner']).any? { |node| node['kind'] == 'DeprecatedAttr' }
+end
+
+def collect_method_names_with_bases(ast, class_name, visited = {})
+  @method_names_with_bases_cache ||= {}
+  cache_key = [ast.object_id, class_name]
+  cached = @method_names_with_bases_cache[cache_key]
+  return cached if cached
+
+  return [] if class_name.nil? || class_name.empty? || visited[class_name]
+
+  visited[class_name] = true
+  index = ast_class_index(ast)
+  own_names = index[:methods_by_class].fetch(class_name, {}).keys
+  base_names = collect_class_bases(ast, class_name).flat_map do |base|
+    collect_method_names_with_bases(ast, base, visited)
+  end
+
+  combined = (own_names + base_names).uniq
+  @method_names_with_bases_cache[cache_key] = combined
+  combined
+end
+
 def resolve_auto_method(ast, qt_class, auto_entry)
+  @resolve_auto_method_cache ||= {}
   entry = auto_entry.is_a?(String) ? { qt_name: auto_entry } : auto_entry.dup
+  cache_key = [
+    ast.object_id,
+    qt_class,
+    entry[:qt_name],
+    entry[:ruby_name],
+    entry[:param_count],
+    Array(entry[:param_types]).map { |t| normalized_cpp_type_name(t) },
+    Array(entry[:arg_casts])
+  ]
+  return @resolve_auto_method_cache[cache_key] if @resolve_auto_method_cache.key?(cache_key)
+
   qt_name = entry.fetch(:qt_name)
   decls = collect_method_decls_with_bases(ast, qt_class, qt_name)
-  return nil if decls.empty?
+  return @resolve_auto_method_cache[cache_key] = nil if decls.empty?
 
   built = decls.filter_map do |decl|
+    next unless decl['__effective_access'] == 'public'
+    next if deprecated_method_decl?(decl)
+    next unless auto_exportable_method_name?(decl['name'])
+
     parsed = parse_method_signature(decl)
     next unless parsed
 
-    method = build_auto_method_from_decl(decl, entry)
+    method = build_auto_method_from_decl(decl, entry, qt_class: qt_class)
     next unless method
 
     {
@@ -311,40 +429,79 @@ def resolve_auto_method(ast, qt_class, auto_entry)
       param_types: parsed[:params].map { |param| normalized_cpp_type_name(param[:type]) }
     }
   end
-  return nil if built.empty?
+  return @resolve_auto_method_cache[cache_key] = nil if built.empty?
 
   if entry[:param_count]
     built.select! { |candidate| candidate[:method][:args].length == entry[:param_count] }
-    return nil if built.empty?
+    return @resolve_auto_method_cache[cache_key] = nil if built.empty?
   end
 
   if entry[:param_types]
     expected = entry[:param_types].map { |t| normalized_cpp_type_name(t) }
     built.select! { |candidate| candidate[:param_types] == expected }
-    return nil if built.empty?
+    return @resolve_auto_method_cache[cache_key] = nil if built.empty?
   end
 
-  built.min_by { |candidate| candidate[:method][:args].length }[:method]
+  @resolve_auto_method_cache[cache_key] = built.min_by { |candidate| candidate[:method][:args].length }[:method]
 end
 
 def expand_auto_methods(specs, ast)
+  total_candidates = 0
+  total_resolved = 0
+  total_skipped = 0
+
   specs.map do |spec|
-    auto_entries = Array(spec[:auto_methods])
+    spec_start = monotonic_now
+    auto_mode = spec[:auto_methods]
+    auto_entries = case auto_mode
+                   when :all
+                     names = collect_method_names_with_bases(ast, spec[:qt_class]).select { |name| auto_exportable_method_name?(name) }
+                     rules = spec.fetch(:auto_method_rules, {})
+                     names.sort.map do |name|
+                       rule = rules[name.to_sym] || rules[name]
+                       rule ? { qt_name: name }.merge(rule) : { qt_name: name }
+                     end
+                   else
+                     Array(spec[:auto_methods])
+                   end
     manual_methods = Array(spec[:methods])
     next spec if auto_entries.empty?
+
+    spec_candidates = auto_entries.length
+    spec_resolved = 0
+    spec_skipped = 0
 
     existing_names = manual_methods.map { |m| m[:qt_name] }.to_set
     auto_methods = auto_entries.filter_map do |entry|
       qt_name = entry.is_a?(String) ? entry : entry[:qt_name]
-      next if existing_names.include?(qt_name)
+      if existing_names.include?(qt_name)
+        spec_skipped += 1
+        next
+      end
 
       resolved = resolve_auto_method(ast, spec[:qt_class], entry)
-      raise "Failed to auto-resolve #{spec[:qt_class]}##{qt_name}" unless resolved
+      if resolved.nil?
+        if auto_mode == :all
+          spec_skipped += 1
+          next
+        end
 
+        raise "Failed to auto-resolve #{spec[:qt_class]}##{qt_name}"
+      end
+
+      spec_resolved += 1
       resolved
     end
 
+    total_candidates += spec_candidates
+    total_resolved += spec_resolved
+    total_skipped += spec_skipped
+    elapsed = monotonic_now - spec_start
+    debug_log("auto #{spec[:qt_class]} mode=#{auto_mode || :list} candidates=#{spec_candidates} resolved=#{spec_resolved} skipped=#{spec_skipped} #{format('%.3fs', elapsed)}")
+
     spec.merge(methods: manual_methods + auto_methods)
+  end.tap do
+    debug_log("auto totals candidates=#{total_candidates} resolved=#{total_resolved} skipped=#{total_skipped}")
   end
 end
 
@@ -453,17 +610,34 @@ def enrich_specs_with_properties(specs, ast)
       property = property_name_from_setter(method[:qt_name])
       next unless property
       next unless class_has_method?(ast, spec[:qt_class], property)
-      next if methods.any? { |m| m[:qt_name] == property }
+      existing_getter = methods.find { |m| m[:qt_name] == property && m[:args].empty? }
+      if existing_getter
+        existing_getter[:property] ||= property
+        next
+      end
 
-      arg = method[:args].first
+      getter_decl = collect_method_decls_with_bases(ast, spec[:qt_class], property).find do |decl|
+        next false unless decl['__effective_access'] == 'public'
+
+        parsed = parse_method_signature(decl)
+        next false unless parsed && parsed[:params].empty?
+
+        map_cpp_return_type(parsed[:return_type])
+      end
+      next unless getter_decl
+
+      parsed_getter = parse_method_signature(getter_decl)
+      ret_info = map_cpp_return_type(parsed_getter[:return_type])
+      next unless ret_info
+
       getter = {
         qt_name: property,
         ruby_name: property,
-        ffi_return: arg[:ffi],
+        ffi_return: ret_info[:ffi_return],
         args: [],
         property: property
       }
-      getter[:return_cast] = :qstring_to_utf8 if arg[:ffi] == :string && arg[:cast] == :qstring
+      getter[:return_cast] = ret_info[:return_cast] if ret_info[:return_cast]
       methods << getter
     end
 
@@ -560,10 +734,10 @@ def generate_cpp_method(lines, spec, method)
            end
   lines << '  }'
   lines << ''
-  lines << "  auto* obj = static_cast<#{spec[:qt_class]}*>(handle);"
+  lines << "  auto* self_obj = static_cast<#{spec[:qt_class]}*>(handle);"
 
   call_args = method[:args].map { |arg| arg_expr(arg) }.join(', ')
-  invocation = "obj->#{method[:qt_name]}(#{call_args})"
+  invocation = "self_obj->#{method[:qt_name]}(#{call_args})"
 
   if method[:ffi_return] == :void
     lines << "  #{invocation};"
@@ -572,6 +746,8 @@ def generate_cpp_method(lines, spec, method)
     lines << '  thread_local QByteArray utf8;'
     lines << '  utf8 = value.toUtf8();'
     lines << '  return utf8.constData();'
+  elsif method[:ffi_return] == :pointer
+    lines << "  return const_cast<void*>(static_cast<const void*>(#{invocation}));"
   else
     lines << "  return #{invocation};"
   end
@@ -677,7 +853,7 @@ end
 def ruby_api_metadata(methods)
   qt_method_names = methods.map { |method| method[:qt_name] }.uniq
   ruby_method_names = methods.flat_map do |method|
-    ruby_name = method[:ruby_name]
+    ruby_name = ruby_safe_method_name(method[:ruby_name])
     snake = to_snake(ruby_name)
     snake == ruby_name ? [ruby_name] : [ruby_name, snake]
   end.uniq
@@ -698,12 +874,33 @@ def append_ruby_class_api_constants(lines, qt_class:, metadata:, indent:)
 end
 
 def append_ruby_native_call_method(lines, method:, native_call:, indent:)
-  ruby_name = method[:ruby_name]
+  ruby_name = ruby_safe_method_name(method[:ruby_name])
   snake_alias = to_snake(ruby_name)
-  ruby_args = method[:args].map { |arg| arg[:name] }.join(', ')
+  arg_map = ruby_arg_name_map(method[:args])
+  required_arg_count = method.fetch(:required_arg_count, method[:args].length)
+  ruby_args = method[:args].each_with_index.map do |arg, idx|
+    safe = arg_map[arg[:name]]
+    idx < required_arg_count ? safe : "#{safe} = nil"
+  end.join(', ')
+  rewritten_native_call = native_call
+  method[:args].each_with_index do |arg, idx|
+    safe = arg_map[arg[:name]]
+    replacement =
+      if idx >= required_arg_count
+        case arg[:ffi]
+        when :int then "(#{safe}.nil? ? 0 : #{safe})"
+        when :pointer then safe
+        when :string then "(#{safe}.nil? ? '' : #{safe})"
+        else safe
+        end
+      else
+        safe
+      end
+    rewritten_native_call = rewritten_native_call.gsub(/\b#{Regexp.escape(arg[:name])}\b/, replacement)
+  end
 
   lines << "#{indent}def #{ruby_name}(#{ruby_args})"
-  lines << "#{indent}  #{native_call}"
+  lines << "#{indent}  #{rewritten_native_call}"
   lines << "#{indent}end"
   lines << "#{indent}alias_method :#{snake_alias}, :#{ruby_name}" if snake_alias != ruby_name
 end
@@ -762,14 +959,16 @@ def generate_ruby_qapplication(lines, spec)
   lines << '      end'
 
   Array(spec[:class_methods]).each do |method|
-    ruby_name = method[:ruby_name]
+    ruby_name = ruby_safe_method_name(method[:ruby_name])
     snake_alias = to_snake(ruby_name)
-    args = Array(method[:args]).join(', ')
+    method_arg_hashes = Array(method[:args]).map { |name| { name: name } }
+    arg_map = ruby_arg_name_map(method_arg_hashes)
+    args = method_arg_hashes.map { |arg| arg_map[arg[:name]] }.join(', ')
 
     lines << ''
     lines << "      def #{ruby_name}(#{args})"
     if method[:native]
-      native_args = Array(method[:args]).join(', ')
+      native_args = method_arg_hashes.map { |arg| arg_map[arg[:name]] }.join(', ')
       call_suffix = native_args.empty? ? '' : "(#{native_args})"
       lines << "        Native.#{method[:native]}#{call_suffix}"
     else
@@ -861,18 +1060,26 @@ def generate_ruby_widgets(specs, super_qt_by_qt, wrapper_qt_classes)
   lines.join("\n") + "\n"
 end
 
-ast = ast_dump
-validate_qt_api!(ast, CLASS_SPECS)
-expanded_specs = expand_auto_methods(CLASS_SPECS, ast)
-effective_specs = enrich_specs_with_properties(expanded_specs, ast)
-super_qt_by_qt, wrapper_qt_classes = build_generated_inheritance(ast, effective_specs)
+total_start = monotonic_now
+ast = timed('ast_dump_total') { ast_dump }
+timed('validate_qt_api') { validate_qt_api!(ast, CLASS_SPECS) }
+expanded_specs = timed('expand_auto_methods') { expand_auto_methods(CLASS_SPECS, ast) }
+effective_specs = timed('enrich_specs_with_properties') { enrich_specs_with_properties(expanded_specs, ast) }
+super_qt_by_qt, wrapper_qt_classes = timed('build_generated_inheritance') { build_generated_inheritance(ast, effective_specs) }
 
-FileUtils.mkdir_p(File.dirname(CPP_PATH))
-File.write(CPP_PATH, generate_cpp_bridge(effective_specs))
-FileUtils.mkdir_p(File.dirname(API_PATH))
-File.write(API_PATH, generate_bridge_api(effective_specs))
-FileUtils.mkdir_p(File.dirname(RUBY_WIDGETS_PATH))
-File.write(RUBY_WIDGETS_PATH, generate_ruby_widgets(effective_specs, super_qt_by_qt, wrapper_qt_classes))
+timed('write_cpp_bridge') do
+  FileUtils.mkdir_p(File.dirname(CPP_PATH))
+  File.write(CPP_PATH, generate_cpp_bridge(effective_specs))
+end
+timed('write_bridge_api') do
+  FileUtils.mkdir_p(File.dirname(API_PATH))
+  File.write(API_PATH, generate_bridge_api(effective_specs))
+end
+timed('write_ruby_widgets') do
+  FileUtils.mkdir_p(File.dirname(RUBY_WIDGETS_PATH))
+  File.write(RUBY_WIDGETS_PATH, generate_ruby_widgets(effective_specs, super_qt_by_qt, wrapper_qt_classes))
+end
+debug_log("total=#{format('%.3fs', monotonic_now - total_start)}")
 
 puts "Generated #{CPP_PATH}"
 puts "Generated #{API_PATH}"
