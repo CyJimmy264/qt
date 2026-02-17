@@ -394,7 +394,7 @@ def generate_cpp_bridge(specs)
   required_includes.each { |inc| lines << "#include <#{inc}>" }
   lines << '#include <QByteArray>'
   lines << '#include <QString>'
-  lines << '#include "../../ext/qt_ruby_bridge/qt_ruby_runtime.hpp"'
+  lines << '#include "qt_ruby_runtime.hpp"'
   lines << ''
   lines << 'namespace {'
   lines << ''

@@ -46,18 +46,34 @@ generated_cpp = if File.exist?('qt_ruby_bridge.cpp')
                 else
                   File.expand_path('../../build/generated/qt_ruby_bridge.cpp', __dir__)
                 end
+runtime_cpp = File.expand_path('../../ext/qt_ruby_bridge/qt_ruby_runtime.cpp', __dir__)
+runtime_hpp = File.expand_path('../../ext/qt_ruby_bridge/qt_ruby_runtime.hpp', __dir__)
 
 unless File.exist?(generated_cpp)
   abort "Generated source not found: #{generated_cpp}. Run: ruby scripts/generate_bridge.rb"
+end
+unless File.exist?(runtime_cpp)
+  abort "Runtime source not found: #{runtime_cpp}"
+end
+unless File.exist?(runtime_hpp)
+  abort "Runtime header not found: #{runtime_hpp}"
 end
 
 local_cpp = File.expand_path('qt_ruby_bridge.cpp')
 unless File.exist?(local_cpp) && File.identical?(generated_cpp, local_cpp)
   FileUtils.cp(generated_cpp, local_cpp)
 end
+local_runtime_cpp = File.expand_path('qt_ruby_runtime.cpp')
+unless File.exist?(local_runtime_cpp) && File.identical?(runtime_cpp, local_runtime_cpp)
+  FileUtils.cp(runtime_cpp, local_runtime_cpp)
+end
+local_runtime_hpp = File.expand_path('qt_ruby_runtime.hpp')
+unless File.exist?(local_runtime_hpp) && File.identical?(runtime_hpp, local_runtime_hpp)
+  FileUtils.cp(runtime_hpp, local_runtime_hpp)
+end
 
 $CXXFLAGS = "#{$CXXFLAGS} #{cflags} -std=c++17"
 $LDFLAGS = "#{$LDFLAGS} #{libs}"
-$srcs = ['qt_ruby_bridge.cpp']
+$srcs = ['qt_ruby_bridge.cpp', 'qt_ruby_runtime.cpp']
 
 create_makefile('qt/qt_ruby_bridge')
