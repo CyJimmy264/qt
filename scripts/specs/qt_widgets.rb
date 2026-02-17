@@ -64,6 +64,12 @@ module QtRubyGenerator
             ffi_return: :void,
             args: [{ name: 'style', ffi: :string, cast: :qstring }]
           },
+          {
+            qt_name: 'setFocusPolicy',
+            ruby_name: 'setFocusPolicy',
+            ffi_return: :void,
+            args: [{ name: 'policy', ffi: :int, cast: 'Qt::FocusPolicy' }]
+          },
           { qt_name: 'show', ruby_name: 'show', ffi_return: :void, args: [] },
           { qt_name: 'hide', ruby_name: 'hide', ffi_return: :void, args: [] },
           { qt_name: 'isVisible', ruby_name: 'isVisible', ffi_return: :int, args: [] },

@@ -102,6 +102,7 @@ buttons.each do |btn|
   view = QPushButton.new(window)
   view.set_geometry(btn[:x], btn[:y], btn[:w], btn[:h])
   view.set_text(btn[:text])
+  view.set_focus_policy(Qt::NoFocus)
   view.set_style_sheet(BTN_STYLE)
   btn[:view] = view
 end
@@ -256,7 +257,6 @@ buttons.each do |btn|
   btn[:view].connect('clicked') do |_checked|
     trigger_action.call(btn[:key])
   end
-  btn[:view].on(:key_press) { |ev| handle_key_event.call(ev) }
 end
 
 window.on(:key_press) { |ev| handle_key_event.call(ev) }

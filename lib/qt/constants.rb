@@ -2,6 +2,7 @@
 
 module Qt
   AlignCenter = 0x84
+  NoFocus = 0
   EventMouseButtonPress = 2
   EventMouseButtonRelease = 3
   EventMouseMove = 5
