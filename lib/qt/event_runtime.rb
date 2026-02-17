@@ -2,6 +2,31 @@
 
 module Qt
   module EventRuntime
+    module WidgetMethods
+      def on(event_name, &block)
+        raise ArgumentError, 'pass block to on' unless block
+
+        EventRuntime.on_event(self, event_name, &block)
+        self
+      end
+      alias_method :on_event, :on
+
+      def connect(signal_name, &block)
+        raise ArgumentError, 'pass block to connect' unless block
+
+        EventRuntime.on_signal(self, signal_name, &block)
+        self
+      end
+      alias_method :on_signal, :connect
+      alias_method :slot, :connect
+
+      def disconnect(signal_name = nil)
+        EventRuntime.off_signal(self, signal_name)
+        self
+      end
+      alias_method :off_signal, :disconnect
+    end
+
     module_function
 
     def on_event(widget, event_name, &block)

@@ -1021,6 +1021,7 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
   lines << ''
   lines << '    attr_reader :handle'
   lines << '    attr_reader :children' if spec[:ruby_class] == 'QWidget' || widget_based
+  lines << '    include EventRuntime::WidgetMethods'
   lines << ''
 
   if spec[:constructor][:parent]
@@ -1075,27 +1076,6 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
   lines << '    end'
   lines << '    alias_method :qt_inspect, :q_inspect'
   lines << '    alias_method :to_h, :q_inspect'
-  lines << ''
-  lines << '    def on(event_name, &block)'
-  lines << "      raise ArgumentError, 'pass block to on' unless block"
-  lines << '      Native.on_event(self, event_name, &block)'
-  lines << '      self'
-  lines << '    end'
-  lines << '    alias_method :on_event, :on'
-  lines << ''
-  lines << '    def connect(signal_name, &block)'
-  lines << "      raise ArgumentError, 'pass block to connect' unless block"
-  lines << '      Native.on_signal(self, signal_name, &block)'
-  lines << '      self'
-  lines << '    end'
-  lines << '    alias_method :on_signal, :connect'
-  lines << '    alias_method :slot, :connect'
-  lines << ''
-  lines << '    def disconnect(signal_name = nil)'
-  lines << '      Native.off_signal(self, signal_name)'
-  lines << '      self'
-  lines << '    end'
-  lines << '    alias_method :off_signal, :disconnect'
   lines << ''
   spec[:methods].each do |method|
     ruby_name = method[:ruby_name]
