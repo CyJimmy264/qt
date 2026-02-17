@@ -15,7 +15,8 @@ module QtRubyGenerator
           { ruby_name: 'topLevelWidgetsCount', native: 'qapplication_top_level_widgets_count', args: [] },
           { ruby_name: 'mouseX', native: 'qapplication_mouse_x', args: [] },
           { ruby_name: 'mouseY', native: 'qapplication_mouse_y', args: [] },
-          { ruby_name: 'mouseButtons', native: 'qapplication_mouse_buttons', args: [] }
+          { ruby_name: 'mouseButtons', native: 'qapplication_mouse_buttons', args: [] },
+          { ruby_name: 'keyDown', native: 'qapplication_key_down', args: ['key'] }
         ],
         methods: [
           { qt_name: 'exec', ruby_name: 'exec', ffi_return: :int, args: [] }
