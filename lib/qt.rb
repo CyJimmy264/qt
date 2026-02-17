@@ -27,4 +27,7 @@ end
 ::QWidget = Qt::QWidget unless defined?(::QWidget)
 ::QLabel = Qt::QLabel unless defined?(::QLabel)
 ::QPushButton = Qt::QPushButton unless defined?(::QPushButton)
+::QLineEdit = Qt::QLineEdit unless defined?(::QLineEdit)
 ::QVBoxLayout = Qt::QVBoxLayout unless defined?(::QVBoxLayout)
+::QTableWidget = Qt::QTableWidget unless defined?(::QTableWidget)
+::QScrollArea = Qt::QScrollArea unless defined?(::QScrollArea)

@@ -562,7 +562,7 @@ def generate_ruby_widget_class(lines, spec)
       lines << '        app&.register_window(self)'
       lines << '      end'
     elsif spec[:constructor][:register_in_parent]
-      lines << '      parent&.add_child(self)'
+      lines << '      parent.add_child(self) if parent&.respond_to?(:add_child)'
     end
   else
     lines << '    def initialize(_argc = 0, _argv = [])'
