@@ -8,6 +8,9 @@ module QtRubyGenerator
         ruby_class: 'QApplication',
         prefix: 'qapplication',
         constructor: { parent: false, mode: :qapplication },
+        class_methods: [
+          { ruby_name: 'qtVersion', native: 'qt_version', args: [] }
+        ],
         methods: [
           { qt_name: 'exec', ruby_name: 'exec', ffi_return: :int, args: [] }
         ],

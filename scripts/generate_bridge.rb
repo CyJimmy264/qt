@@ -258,7 +258,7 @@ def generate_bridge_api
   lines.join("\n") + "\n"
 end
 
-def generate_ruby_qapplication(lines)
+def generate_ruby_qapplication(lines, spec)
   lines << '  class QApplication'
   lines << '    attr_reader :handle'
   lines << ''
@@ -270,6 +270,25 @@ def generate_ruby_qapplication(lines)
   lines << '      def current=(app)'
   lines << '        Thread.current[:qt_ruby_current_app] = app'
   lines << '      end'
+
+  Array(spec[:class_methods]).each do |method|
+    ruby_name = method[:ruby_name]
+    snake_alias = to_snake(ruby_name)
+    args = Array(method[:args]).join(', ')
+
+    lines << ''
+    lines << "      def #{ruby_name}(#{args})"
+    if method[:native]
+      native_args = Array(method[:args]).join(', ')
+      call_suffix = native_args.empty? ? '' : "(#{native_args})"
+      lines << "        Native.#{method[:native]}#{call_suffix}"
+    else
+      lines << '        nil'
+    end
+    lines << '      end'
+    lines << "      alias_method :#{snake_alias}, :#{ruby_name}" if snake_alias != ruby_name
+  end
+
   lines << '    end'
   lines << ''
   lines << '    def initialize(_argc = 0, _argv = [])'
@@ -336,11 +355,14 @@ def generate_ruby_widget_class(lines, spec)
   end
 
   spec[:methods].each do |method|
+    ruby_name = method[:ruby_name]
+    snake_alias = to_snake(ruby_name)
     ruby_args = method[:args].map { |arg| arg[:name] }.join(', ')
-    lines << "    def #{method[:ruby_name]}(#{ruby_args})"
+    lines << "    def #{ruby_name}(#{ruby_args})"
     call_args = ['@handle'] + method[:args].map { |arg| arg[:name] }
     lines << "      Native.#{spec[:prefix]}_#{to_snake(method[:qt_name])}(#{call_args.join(', ')})"
     lines << '    end'
+    lines << "    alias_method :#{snake_alias}, :#{ruby_name}" if snake_alias != ruby_name
     lines << ''
   end
 
@@ -354,7 +376,8 @@ def generate_ruby_widgets
   lines << ''
   lines << 'module Qt'
 
-  generate_ruby_qapplication(lines)
+  qapplication_spec = CLASS_SPECS.find { |spec| spec[:ruby_class] == 'QApplication' }
+  generate_ruby_qapplication(lines, qapplication_spec)
 
   CLASS_SPECS.each do |spec|
     next if spec[:ruby_class] == 'QApplication'

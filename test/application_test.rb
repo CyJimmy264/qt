@@ -16,6 +16,7 @@ class QtBindingsTest < Minitest::Test
 
     app = QApplication.new(0, [])
     assert_equal app, Qt::QApplication.current
+    assert_equal QApplication.qtVersion, QApplication.qt_version
   ensure
     app&.dispose
   end
