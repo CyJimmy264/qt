@@ -20,7 +20,7 @@ Build real Qt Widgets apps in pure Ruby, mutate them live from IRB, and keep C/C
 ## 30-Second Wow
 
 ```bash
-ruby examples/live_layout_console.rb
+ruby examples/development_ordered_demos/03_live_layout_console.rb
 ```
 
 Then in IRB:
@@ -142,9 +142,9 @@ Shape:
 ## Examples
 
 ```bash
-ruby examples/dsl_hello.rb
-ruby examples/live_console.rb
-ruby examples/live_layout_console.rb
+ruby examples/development_ordered_demos/01_dsl_hello.rb
+ruby examples/development_ordered_demos/02_live_console.rb
+ruby examples/development_ordered_demos/03_live_layout_console.rb
 ```
 
 ## Architecture

@@ -40,7 +40,7 @@
   - Rewrite examples to use that model.
 
 ## Example App Guidance
-- `examples/timetrap_clockify.rb` should keep scroll/state behavior in Ruby.
+- `examples/development_ordered_demos/08_timetrap_clockify.rb` should keep scroll/state behavior in Ruby.
 - Avoid recreating `QScrollArea` content widget on each render when preserving scroll UX.
 - Prefer updating/reusing existing container and child widgets.
 
