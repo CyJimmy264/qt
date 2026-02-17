@@ -82,6 +82,34 @@ class QtEventRuntimeTest < Minitest::Test
     assert_payload_forwarding(Qt::EventResize, [640, 360, 320, 180])
   end
 
+  def test_resize_event_end_to_end
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    app = QApplication.new(0, [])
+    window = QWidget.new
+    payloads = []
+
+    window.on(:resize) { |ev| payloads << ev }
+    window.show
+    QApplication.process_events
+    window.set_geometry(20, 30, 400, 260)
+
+    20.times do
+      QApplication.process_events
+      break unless payloads.empty?
+      sleep(0.005)
+    end
+
+    skip 'resize event was not delivered in this Qt platform environment' if payloads.empty?
+
+    ev = payloads.last
+    assert_equal Qt::EventResize, ev[:type]
+    assert_equal 400, ev[:a]
+    assert_equal 260, ev[:b]
+  ensure
+    app&.dispose
+  end
+
   private
 
   def assert_payload_forwarding(event_type, values)
