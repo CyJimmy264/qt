@@ -3,6 +3,14 @@
 require_relative 'test_helper'
 
 class QtEventRuntimeTest < Minitest::Test
+  def setup
+    reset_event_runtime_state
+  end
+
+  def teardown
+    reset_event_runtime_state
+  end
+
   def test_native_does_not_expose_runtime_helpers
     refute_respond_to Qt::Native, :on_event
     refute_respond_to Qt::Native, :on_signal
@@ -57,5 +65,44 @@ class QtEventRuntimeTest < Minitest::Test
     assert_raises(ArgumentError) { button.connect('clicked(QString)') { |_payload| nil } }
   ensure
     app&.dispose
+  end
+
+  def test_event_payload_contract_for_mouse_events
+    assert_payload_forwarding(Qt::EventMouseButtonPress, [12, 34, 1, 3])
+    assert_payload_forwarding(Qt::EventMouseButtonRelease, [8, 9, 1, 0])
+    assert_payload_forwarding(Qt::EventMouseMove, [101, 202, 0, 1])
+  end
+
+  def test_event_payload_contract_for_key_events
+    assert_payload_forwarding(Qt::EventKeyPress, [65, 0, 0, 1])
+    assert_payload_forwarding(Qt::EventKeyRelease, [13, 0, 1, 2])
+  end
+
+  def test_event_payload_contract_for_resize_event
+    assert_payload_forwarding(Qt::EventResize, [640, 360, 320, 180])
+  end
+
+  private
+
+  def assert_payload_forwarding(event_type, values)
+    ptr = FFI::Pointer.new(0x1234)
+    captured = []
+
+    handlers = { ptr.address => { event_type => [->(payload) { captured << payload }] } }
+    Qt::EventRuntime.instance_variable_set(:@event_handlers, handlers)
+    Qt::EventRuntime.ensure_event_callback!
+    callback = Qt::EventRuntime.instance_variable_get(:@event_callback)
+
+    callback.call(ptr, event_type, *values)
+
+    assert_equal 1, captured.length
+    assert_equal({ type: event_type, a: values[0], b: values[1], c: values[2], d: values[3] }, captured.first)
+  end
+
+  def reset_event_runtime_state
+    Qt::EventRuntime.instance_variable_set(:@event_handlers, nil)
+    Qt::EventRuntime.instance_variable_set(:@signal_handlers, nil)
+    Qt::EventRuntime.instance_variable_set(:@event_callback, nil)
+    Qt::EventRuntime.instance_variable_set(:@signal_callback, nil)
   end
 end
