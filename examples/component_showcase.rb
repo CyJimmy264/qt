@@ -54,17 +54,17 @@ api_box.set_alignment(Qt::AlignCenter)
 api_box.set_text('Classes:\nQWidget QLabel QPushButton QVBoxLayout')
 
 buttons = [
-  { key: :add_label, text: 'ADD LABEL', y: 176 },
-  { key: :add_button, text: 'ADD PUSHBUTTON', y: 222 },
-  { key: :theme, text: 'TOGGLE THEME', y: 268 },
-  { key: :inspect, text: 'INSPECT LAST', y: 314 },
-  { key: :remove, text: 'REMOVE LAST', y: 360 },
-  { key: :clear, text: 'CLEAR ALL', y: 406 }
+  { key: :add_label, text: 'ADD LABEL', y_offset: 176 },
+  { key: :add_button, text: 'ADD PUSHBUTTON', y_offset: 222 },
+  { key: :theme, text: 'TOGGLE THEME', y_offset: 268 },
+  { key: :inspect, text: 'INSPECT LAST', y_offset: 314 },
+  { key: :remove, text: 'REMOVE LAST', y_offset: 360 },
+  { key: :clear, text: 'CLEAR ALL', y_offset: 406 }
 ]
 
 buttons.each do |btn|
   view = QPushButton.new(window)
-  view.set_geometry(WINDOW_W - PANEL_W + 16, btn[:y], PANEL_W - 32, 36)
+  view.set_geometry(WINDOW_W - PANEL_W + 16, btn[:y_offset], PANEL_W - 32, 36)
   view.set_text(btn[:text])
   btn[:view] = view
 end
@@ -77,6 +77,26 @@ hint.set_text("Mouse controls:\n- Click side buttons\n- Resize window and see la
 items = []
 counter = 1
 dark = false
+
+layout_ui = lambda do
+  ww = window.width
+  wh = window.height
+  side_x = ww - PANEL_W
+
+  root_bg.set_geometry(0, 0, ww, wh)
+  preview_panel.set_geometry(16, 16, ww - PANEL_W - 28, wh - 32)
+  preview_title.set_geometry(32, 32, ww - PANEL_W - 60, 36)
+  preview_host.set_geometry(32, 80, ww - PANEL_W - 60, wh - 112)
+
+  side_panel.set_geometry(side_x, 0, PANEL_W, wh)
+  status.set_geometry(side_x + 16, 16, PANEL_W - 32, 64)
+  api_box.set_geometry(side_x + 16, 88, PANEL_W - 32, 70)
+  hint.set_geometry(side_x + 16, wh - 116, PANEL_W - 32, 96)
+
+  buttons.each do |btn|
+    btn[:view].set_geometry(side_x + 16, btn[:y_offset], PANEL_W - 32, 36)
+  end
+end
 
 apply_theme = lambda do
   if dark
@@ -181,6 +201,8 @@ end
 
 apply_theme.call
 refresh_status.call
+layout_ui.call
+window.on(:resize) { |_ev| layout_ui.call }
 window.show
 QApplication.process_events
 
