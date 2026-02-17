@@ -1,173 +1,196 @@
 # frozen_string_literal: true
 
-$LOAD_PATH.unshift(File.expand_path('../../lib', __dir__))
+$LOAD_PATH.unshift(File.expand_path('../../../../../lib', __dir__))
 require 'qt'
 
-WINDOW_W = 1100
-WINDOW_H = 700
-ROWS = 12
-COLS = 5
+WINDOW_W = 980
+WINDOW_H = 660
+COLS = 6
 
-HEADERS = ['Month', 'Planned', 'Actual', 'Delta', 'Status'].freeze
-MONTHS = %w[Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec].freeze
-COLUMN_WIDTHS = [120, 170, 170, 150, 150].freeze
+HEADERS = ['Item', 'Date', 'Price', 'Currency', 'Ex. Rate', 'NOK'].freeze
+ROWS_DATA = [
+  ['AirportBus', '15/6/2006', 150, 'NOK', 1],
+  ['Flight (Munich)', '15/6/2006', 2350, 'NOK', 1],
+  ['Lunch', '15/6/2006', -14, 'EUR', 8],
+  ['Flight (LA)', '21/5/2006', 980, 'EUR', 8],
+  ['Taxi', '16/6/2006', 5, 'USD', 7],
+  ['Dinner', '16/6/2006', 120, 'USD', 7],
+  ['Hotel', '16/6/2006', 300, 'USD', 7],
+  ['Flight (Oslo)', '18/6/2006', 1240, 'NOK', 1]
+].freeze
 
-BASE_BG = 'background-color: #f4f6fb; border: 1px solid #d8deea;'
-PANEL = 'background-color: #ffffff; border: 1px solid #cfd8e6; color: #0f172a;'
-TITLE = 'background-color: #ffffff; border: 1px solid #bfcde0; color: #0f172a; font-size: 17px; font-weight: 800;'
-BTN = 'background-color: #ffffff; border: 1px solid #9fb1cc; color: #0f172a; font-size: 12px; font-weight: 700;'
-BTN_ACTIVE = 'background-color: #dbeafe; border: 2px solid #2563eb; color: #0f172a; font-size: 12px; font-weight: 800;'
-GOOD = 'background-color: #ecfdf5; border: 1px solid #86efac; color: #166534; font-weight: 700;'
-BAD = 'background-color: #fff1f2; border: 1px solid #fda4af; color: #9f1239; font-weight: 700;'
-NEUTRAL = 'background-color: #f8fafc; border: 1px solid #cbd5e1; color: #334155; font-weight: 700;'
-INPUT = 'background-color: #ffffff; border: 1px solid #b6c3d8; color: #0f172a; font-size: 12px;'
+ROWS = ROWS_DATA.length + 1
+TOTAL_ROW = ROWS - 1
+
+BG = 'background-color: #0b111b; border: 1px solid #1f2937;'
+PANEL = 'background-color: #0f172a; border: 1px solid #334155; color: #e2e8f0;'
+TITLE = 'background-color: #111827; border: 1px solid #374151; color: #f8fafc; font-size: 16px; font-weight: 800;'
+INPUT = 'background-color: #0b1220; border: 1px solid #334155; color: #f8fafc; font-size: 12px;'
+BTN = 'background-color: #111827; border: 1px solid #64748b; color: #e2e8f0; font-size: 12px; font-weight: 700;'
+BTN_ACTIVE = 'background-color: #1d4ed8; border: 2px solid #60a5fa; color: #f8fafc; font-size: 12px; font-weight: 800;'
+
+TABLE_QSS = [
+  'QTableWidget {',
+  '  background-color: #0b1220;',
+  '  color: #f8fafc;',
+  '  border: 1px solid #334155;',
+  '  gridline-color: #1f2937;',
+  '}',
+  'QHeaderView::section {',
+  '  background-color: #3f3f46;',
+  '  color: #f8fafc;',
+  '  border: 1px solid #4b5563;',
+  '  font-weight: 700;',
+  '}',
+  'QTableCornerButton::section {',
+  '  background-color: #3f3f46;',
+  '  border: 1px solid #4b5563;',
+  '}'
+].join("\n").freeze
 
 app = QApplication.new(0, [])
 window = QWidget.new do |w|
-  w.set_window_title('Qt Ruby Spreadsheet Lite (inspired by PySide spreadsheet)')
-  w.set_geometry(60, 50, WINDOW_W, WINDOW_H)
+  w.set_window_title('Spreadsheet')
+  w.set_geometry(70, 60, WINDOW_W, WINDOW_H)
 end
 
 bg = QLabel.new(window)
 panel = QLabel.new(window)
+
 title = QLabel.new(window)
 title.set_alignment(Qt::AlignCenter)
-title.set_text('Budget Spreadsheet Lite')
+title.set_text('Spreadsheet')
 
-summary = QLabel.new(window)
-summary.set_alignment(Qt::AlignCenter)
-summary.set_text('Fill planned/actual values and click RECOMPUTE')
+cell_label = QLabel.new(window)
+cell_label.set_alignment(Qt::AlignCenter)
+cell_label.set_text('Cell: (A1)')
+
+formula = QLineEdit.new(window)
+formula.set_placeholder_text('Cell value')
+
+apply_btn = QPushButton.new(window)
+apply_btn.set_text('APPLY')
+
+recalc_btn = QPushButton.new(window)
+recalc_btn.set_text('RECALCULATE')
 
 sheet = QTableWidget.new(window)
 sheet.set_row_count(ROWS)
 sheet.set_column_count(COLS)
 sheet.set_vertical_scroll_mode(Qt::ScrollPerPixel)
-sheet.set_horizontal_scroll_bar_policy(Qt::ScrollBarAlwaysOff)
 
-COLUMN_WIDTHS.each_with_index { |width, idx| sheet.set_column_width(idx, width) }
-
-header_labels = []
-HEADERS.each_with_index do |name, idx|
-  label = QLabel.new(window)
-  label.set_alignment(Qt::AlignCenter)
-  label.set_text(name)
-  header_labels << { view: label, col: idx }
+[180, 160, 120, 140, 120, 120].each_with_index do |width, col|
+  sheet.set_column_width(col, width)
 end
 
-planned_inputs = []
-actual_inputs = []
-delta_labels = []
-status_labels = []
-
-ROWS.times do |row|
-  month = QLabel.new(window)
-  month.set_alignment(Qt::AlignCenter)
-  month.set_text(MONTHS[row])
-  month.set_style_sheet(PANEL)
-  sheet.set_cell_widget(row, 0, month)
-
-  planned = QLineEdit.new(window)
-  planned.set_placeholder_text('0')
-  planned.set_text(((row + 1) * 100).to_s)
-  planned.set_style_sheet(INPUT)
-  sheet.set_cell_widget(row, 1, planned)
-
-  actual = QLineEdit.new(window)
-  actual.set_placeholder_text('0')
-  actual.set_text(((row + 1) * 95).to_s)
-  actual.set_style_sheet(INPUT)
-  sheet.set_cell_widget(row, 2, actual)
-
-  delta = QLabel.new(window)
-  delta.set_alignment(Qt::AlignCenter)
-  delta.set_text('0')
-  delta.set_style_sheet(NEUTRAL)
-  sheet.set_cell_widget(row, 3, delta)
-
-  status = QLabel.new(window)
-  status.set_alignment(Qt::AlignCenter)
-  status.set_text('OK')
-  status.set_style_sheet(NEUTRAL)
-  sheet.set_cell_widget(row, 4, status)
-
-  planned_inputs << planned
-  actual_inputs << actual
-  delta_labels << delta
-  status_labels << status
+headers = []
+HEADERS.each_with_index do |text, col|
+  item = QTableWidgetItem.new
+  item.set_text(text)
+  item.set_text_alignment(Qt::AlignCenter)
+  sheet.set_horizontal_header_item(col, item)
+  headers << item
 end
 
-recompute_btn = QPushButton.new(window)
-recompute_btn.set_text('RECOMPUTE')
+matrix = Array.new(ROWS) { Array.new(COLS) }
 
-randomize_btn = QPushButton.new(window)
-randomize_btn.set_text('RANDOMIZE ACTUAL')
-
-reset_btn = QPushButton.new(window)
-reset_btn.set_text('RESET')
-
-flash = lambda do |btn|
-  btn.set_style_sheet(BTN_ACTIVE)
-  QApplication.process_events
-  sleep(0.03)
-  btn.set_style_sheet(BTN)
+ROWS_DATA.each_with_index do |row_data, row|
+  COLS.times do |col|
+    item = QTableWidgetItem.new
+    value = case col
+            when 0 then row_data[0]
+            when 1 then row_data[1]
+            when 2 then row_data[2]
+            when 3 then row_data[3]
+            when 4 then row_data[4]
+            else 0
+            end
+    item.set_text(value.to_s)
+    item.set_text_alignment(Qt::AlignCenter)
+    sheet.set_item(row, col, item)
+    matrix[row][col] = item
+  end
 end
 
-as_int = lambda do |text|
-  s = text.to_s.strip
-  return 0 if s.empty?
+COLS.times do |col|
+  item = QTableWidgetItem.new
+  value = (col.zero? ? 'Total:' : '')
+  item.set_text(value)
+  item.set_text_alignment(Qt::AlignCenter)
+  sheet.set_item(TOTAL_ROW, col, item)
+  matrix[TOTAL_ROW][col] = item
+end
 
-  Integer(s)
-rescue ArgumentError
+int_value = lambda do |text|
+  Integer(text.to_s.strip)
+rescue StandardError
   0
 end
 
 recompute = lambda do
-  total_plan = 0
-  total_actual = 0
-
-  ROWS.times do |row|
-    plan = as_int.call(planned_inputs[row].text)
-    actual = as_int.call(actual_inputs[row].text)
-    delta = actual - plan
-
-    total_plan += plan
-    total_actual += actual
-
-    delta_labels[row].set_text(delta.to_s)
-
-    if delta > 0
-      delta_labels[row].set_style_sheet(BAD)
-      status_labels[row].set_text('OVER')
-      status_labels[row].set_style_sheet(BAD)
-    elsif delta < 0
-      delta_labels[row].set_style_sheet(GOOD)
-      status_labels[row].set_text('UNDER')
-      status_labels[row].set_style_sheet(GOOD)
-    else
-      delta_labels[row].set_style_sheet(NEUTRAL)
-      status_labels[row].set_text('ON PLAN')
-      status_labels[row].set_style_sheet(NEUTRAL)
-    end
+  total = 0
+  ROWS_DATA.length.times do |row|
+    price = int_value.call(matrix[row][2].text)
+    rate = int_value.call(matrix[row][4].text)
+    nok = price * rate
+    matrix[row][5].set_text(nok.to_s)
+    total += nok
   end
 
-  summary.set_text("Planned: #{total_plan} | Actual: #{total_actual} | Delta: #{total_actual - total_plan}")
+  matrix[TOTAL_ROW][5].set_text(total.to_s)
 end
 
-randomize_actual = lambda do
-  srand(Time.now.to_i)
-  ROWS.times do |row|
-    plan = as_int.call(planned_inputs[row].text)
-    jitter = rand(-35..45)
-    actual_inputs[row].set_text((plan + plan * jitter / 100).to_s)
+col_label = lambda do |col|
+  letters = ''
+  n = col + 1
+  while n.positive?
+    n -= 1
+    letters.prepend((65 + (n % 26)).chr)
+    n /= 26
   end
+  letters
 end
 
-reset_all = lambda do
-  ROWS.times do |row|
-    planned_inputs[row].set_text(((row + 1) * 100).to_s)
-    actual_inputs[row].set_text(((row + 1) * 95).to_s)
-  end
+sync_formula_with_current = lambda do
+  row = sheet.current_row
+  col = sheet.current_column
+  return if row.negative? || col.negative?
+
+  item = matrix[row][col]
+  return unless item
+
+  cell_label.set_text("Cell: (#{col_label.call(col)}#{row + 1})")
+  formula.set_text(item.text.to_s)
 end
+
+flash = lambda do |button|
+  button.set_style_sheet(BTN_ACTIVE)
+  QApplication.process_events
+  sleep(0.03)
+  button.set_style_sheet(BTN)
+end
+
+apply_btn.connect('clicked') do
+  row = sheet.current_row
+  col = sheet.current_column
+  next if row.negative? || col.negative?
+
+  item = matrix[row][col]
+  next unless item
+
+  flash.call(apply_btn)
+  item.set_text(formula.text.to_s)
+  recompute.call
+end
+
+recalc_btn.connect('clicked') do
+  flash.call(recalc_btn)
+  recompute.call
+  sync_formula_with_current.call
+end
+
+sheet.on(:mouse_button_release) { sync_formula_with_current.call }
+sheet.on(:key_release) { sync_formula_with_current.call }
 
 layout_ui = lambda do
   ww = window.width
@@ -175,59 +198,35 @@ layout_ui = lambda do
 
   bg.set_geometry(0, 0, ww, wh)
   panel.set_geometry(16, 16, ww - 32, wh - 32)
-  title.set_geometry(32, 32, ww - 64, 42)
 
-  left = 32
-  top = 86
-  available_w = ww - 64
+  title.set_geometry(32, 24, ww - 64, 36)
 
-  header_labels.each do |h|
-    x = left
-    h[:col].times { |col| x += COLUMN_WIDTHS[col] }
-    h[:view].set_geometry(x, top, COLUMN_WIDTHS[h[:col]], 30)
-  end
+  cell_label.set_geometry(32, 68, 130, 32)
+  formula.set_geometry(170, 68, ww - 372, 32)
+  apply_btn.set_geometry(ww - 194, 68, 74, 32)
+  recalc_btn.set_geometry(ww - 112, 68, 80, 32)
 
-  sheet.set_geometry(left, top + 34, available_w, wh - 220)
-
-  recompute_btn.set_geometry(32, wh - 120, 190, 38)
-  randomize_btn.set_geometry(232, wh - 120, 250, 38)
-  reset_btn.set_geometry(492, wh - 120, 140, 38)
-  summary.set_geometry(32, wh - 74, ww - 64, 42)
+  sheet.set_geometry(32, 112, ww - 64, wh - 144)
 end
 
 apply_styles = lambda do
-  bg.set_style_sheet(BASE_BG)
+  bg.set_style_sheet(BG)
   panel.set_style_sheet(PANEL)
   title.set_style_sheet(TITLE)
-  summary.set_style_sheet(PANEL)
-  header_labels.each { |h| h[:view].set_style_sheet(TITLE) }
-  recompute_btn.set_style_sheet(BTN)
-  randomize_btn.set_style_sheet(BTN)
-  reset_btn.set_style_sheet(BTN)
-end
-
-recompute_btn.connect('clicked') do
-  flash.call(recompute_btn)
-  recompute.call
-end
-
-randomize_btn.connect('clicked') do
-  flash.call(randomize_btn)
-  randomize_actual.call
-  recompute.call
-end
-
-reset_btn.connect('clicked') do
-  flash.call(reset_btn)
-  reset_all.call
-  recompute.call
+  cell_label.set_style_sheet(PANEL)
+  formula.set_style_sheet(INPUT)
+  apply_btn.set_style_sheet(BTN)
+  recalc_btn.set_style_sheet(BTN)
+  sheet.set_style_sheet(TABLE_QSS)
 end
 
 window.on(:resize) { layout_ui.call }
 
+recompute.call
 apply_styles.call
 layout_ui.call
-recompute.call
+sheet.set_current_cell(0, 0)
+sync_formula_with_current.call
 window.show
 QApplication.process_events
 

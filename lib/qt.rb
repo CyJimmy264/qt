@@ -31,4 +31,5 @@ end
 ::QLineEdit = Qt::QLineEdit unless defined?(::QLineEdit)
 ::QVBoxLayout = Qt::QVBoxLayout unless defined?(::QVBoxLayout)
 ::QTableWidget = Qt::QTableWidget unless defined?(::QTableWidget)
+::QTableWidgetItem = Qt::QTableWidgetItem if defined?(Qt::QTableWidgetItem) && !defined?(::QTableWidgetItem)
 ::QScrollArea = Qt::QScrollArea unless defined?(::QScrollArea)

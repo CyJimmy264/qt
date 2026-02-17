@@ -327,6 +327,13 @@ def generate_cpp_constructor(lines, spec)
     return
   end
 
+  unless spec[:constructor][:parent]
+    lines << "extern \"C\" void* #{name}() {"
+    lines << "  return new #{spec[:qt_class]}();"
+    lines << '}'
+    return
+  end
+
   lines << "extern \"C\" void* #{name}(void* parent_handle) {"
   lines << "  #{spec[:constructor][:parent_type].delete('*')}* parent = static_cast<#{spec[:constructor][:parent_type]}>(parent_handle);"
   lines << "  return new #{spec[:qt_class]}(parent);"
