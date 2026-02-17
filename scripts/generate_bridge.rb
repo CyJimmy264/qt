@@ -5,7 +5,6 @@ require 'fileutils'
 require 'json'
 require 'set'
 require 'tempfile'
-require_relative 'specs/qt_widgets'
 
 ROOT = File.expand_path('..', __dir__)
 BUILD_DIR = File.join(ROOT, 'build')
@@ -14,7 +13,34 @@ CPP_PATH = File.join(GENERATED_DIR, 'qt_ruby_bridge.cpp')
 API_PATH = File.join(GENERATED_DIR, 'bridge_api.rb')
 RUBY_WIDGETS_PATH = File.join(GENERATED_DIR, 'widgets.rb')
 
-CLASS_SPECS = QtRubyGenerator::Specs::CLASS_SPECS
+# Universal generation policy: keep only class-selection/bootstrap in code.
+TARGET_QT_CLASSES = %w[
+  QWidget
+  QLabel
+  QPushButton
+  QLineEdit
+  QVBoxLayout
+  QTableWidget
+  QTableWidgetItem
+  QScrollArea
+].freeze
+
+QAPPLICATION_SPEC = {
+  qt_class: 'QApplication',
+  ruby_class: 'QApplication',
+  include: 'QApplication',
+  prefix: 'qapplication',
+  constructor: { parent: false, mode: :qapplication },
+  class_methods: [
+    { ruby_name: 'qtVersion', native: 'qt_version', args: [] },
+    { ruby_name: 'processEvents', native: 'qapplication_process_events', args: [] },
+    { ruby_name: 'topLevelWidgetsCount', native: 'qapplication_top_level_widgets_count', args: [] }
+  ],
+  methods: [
+    { qt_name: 'exec', ruby_name: 'exec', ffi_return: :int, args: [] }
+  ],
+  validate: { constructors: ['QApplication'], methods: ['exec'] }
+}.freeze
 RUBY_RESERVED_WORDS = %w[
   BEGIN END alias and begin break case class def defined? do else elsif end ensure false
   for if in module next nil not or redo rescue retry return self super then true undef unless
@@ -42,7 +68,7 @@ def timed(label)
 end
 
 def required_includes
-  CLASS_SPECS.map { |spec| spec.fetch(:include) }.uniq
+  (['QApplication'] + TARGET_QT_CLASSES).uniq
 end
 
 def ffi_to_cpp_type(ffi)
@@ -68,6 +94,11 @@ end
 
 def to_snake(name)
   name.gsub(/([a-z\d])([A-Z])/, '\\1_\\2').downcase
+end
+
+def prefix_for_qt_class(qt_class)
+  core = qt_class.delete_prefix('Q')
+  "q#{to_snake(core)}"
 end
 
 def ruby_safe_method_name(name)
@@ -178,6 +209,47 @@ def walk_ast(node, &block)
   Array(node['inner']).each { |child| walk_ast(child, &block) }
 end
 
+def walk_ast_scoped(node, scope = [], &block)
+  return unless node.is_a?(Hash)
+
+  local_scope = scope
+  name = node['name']
+  if name && !name.empty? && %w[NamespaceDecl CXXRecordDecl].include?(node['kind'])
+    local_scope = scope + [name]
+  end
+
+  yield node, local_scope
+  Array(node['inner']).each { |child| walk_ast_scoped(child, local_scope, &block) }
+end
+
+def ast_int_cast_type_set(ast)
+  @ast_int_cast_type_set_cache ||= {}
+  cached = @ast_int_cast_type_set_cache[ast.object_id]
+  return cached if cached
+
+  types = Set.new
+  integer_alias_pattern = /\A(?:unsigned\s+|signed\s+)?(?:char|short|int|long|long long)\z/
+
+  walk_ast_scoped(ast) do |node, scope|
+    name = node['name']
+    next if name.nil? || name.empty?
+
+    qualified = (scope + [name]).join('::')
+    case node['kind']
+    when 'EnumDecl'
+      types << qualified
+    when 'TypedefDecl', 'TypeAliasDecl'
+      aliased = node.dig('type', 'qualType').to_s.strip
+      next if aliased.empty?
+
+      types << qualified if aliased.match?(integer_alias_pattern)
+      types << qualified if aliased.include?('QFlags<')
+    end
+  end
+
+  @ast_int_cast_type_set_cache[ast.object_id] = types
+end
+
 def collect_class_api(ast, class_name)
   index = ast_class_index(ast)
   methods = index[:methods_by_class].fetch(class_name, {}).keys
@@ -193,6 +265,7 @@ def ast_class_index(ast)
   methods_by_class = Hash.new { |h, k| h[k] = Hash.new { |h2, k2| h2[k2] = [] } }
   bases_by_class = Hash.new { |h, k| h[k] = [] }
   ctors_by_class = Hash.new { |h, k| h[k] = [] }
+  ctor_decls_by_class = Hash.new { |h, k| h[k] = [] }
   method_decl_count = 0
   ctor_decl_count = 0
 
@@ -225,6 +298,7 @@ def ast_class_index(ast)
           next unless inner['name']
 
           ctors_by_class[class_name] << inner['name']
+          ctor_decls_by_class[class_name] << inner.merge('__effective_access' => current_access)
           ctor_decl_count += 1
         end
       end
@@ -239,7 +313,8 @@ def ast_class_index(ast)
   @ast_class_index_cache[ast.object_id] = {
     methods_by_class: methods_by_class,
     bases_by_class: bases_by_class,
-    ctors_by_class: ctors_by_class
+    ctors_by_class: ctors_by_class,
+    ctor_decls_by_class: ctor_decls_by_class
   }
 end
 
@@ -265,7 +340,7 @@ def collect_method_decls_with_bases(ast, class_name, method_name, visited = {})
   all
 end
 
-def map_cpp_arg_type(type_name, qt_class: nil)
+def map_cpp_arg_type(type_name, qt_class: nil, int_cast_types: nil)
   type = type_name.to_s.strip
   type = type.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
   return nil if type.include?('<') || type.include?('>') || type.include?('[') || type.include?('(')
@@ -285,6 +360,14 @@ def map_cpp_arg_type(type_name, qt_class: nil)
   when 'bool'
     { ffi: :int, cast: 'bool' }
   else
+    if type.include?('::') && int_cast_types&.include?(type)
+      return { ffi: :int, cast: type }
+    end
+    if qt_class && type.match?(/\A[A-Z]\w*\z/)
+      qualified = "#{qt_class}::#{type}"
+      return { ffi: :int, cast: qualified } if int_cast_types&.include?(qualified)
+    end
+
     nil
   end
 end
@@ -329,7 +412,7 @@ def parse_method_signature(method_decl)
   }
 end
 
-def build_auto_method_from_decl(method_decl, entry, qt_class:)
+def build_auto_method_from_decl(method_decl, entry, qt_class:, int_cast_types:)
   parsed = parse_method_signature(method_decl)
   return nil unless parsed
 
@@ -339,7 +422,7 @@ def build_auto_method_from_decl(method_decl, entry, qt_class:)
   arg_cast_overrides = Array(entry[:arg_casts])
   args = parsed[:params].each_with_index.map do |param, idx|
     cast_override = arg_cast_overrides[idx]
-    arg_info = map_cpp_arg_type(param[:type], qt_class: qt_class)
+    arg_info = map_cpp_arg_type(param[:type], qt_class: qt_class, int_cast_types: int_cast_types)
     arg_info ||= { ffi: :int } if cast_override
     return nil unless arg_info
 
@@ -397,6 +480,7 @@ end
 
 def resolve_auto_method(ast, qt_class, auto_entry)
   @resolve_auto_method_cache ||= {}
+  int_cast_types = ast_int_cast_type_set(ast)
   entry = auto_entry.is_a?(String) ? { qt_name: auto_entry } : auto_entry.dup
   cache_key = [
     ast.object_id,
@@ -421,7 +505,7 @@ def resolve_auto_method(ast, qt_class, auto_entry)
     parsed = parse_method_signature(decl)
     next unless parsed
 
-    method = build_auto_method_from_decl(decl, entry, qt_class: qt_class)
+    method = build_auto_method_from_decl(decl, entry, qt_class: qt_class, int_cast_types: int_cast_types)
     next unless method
 
     {
@@ -519,6 +603,59 @@ end
 def collect_class_bases(ast, class_name)
   index = ast_class_index(ast)
   Array(index[:bases_by_class][class_name]).uniq
+end
+
+def collect_constructor_decls(ast, class_name)
+  index = ast_class_index(ast)
+  Array(index[:ctor_decls_by_class][class_name])
+end
+
+def class_inherits?(ast, class_name, ancestor, visited = {})
+  return false if class_name.nil? || class_name.empty? || visited[class_name]
+  return true if class_name == ancestor
+
+  visited[class_name] = true
+  collect_class_bases(ast, class_name).any? { |base| class_inherits?(ast, base, ancestor, visited) }
+end
+
+def constructor_supports_parent_only?(decl)
+  return false unless decl['__effective_access'] == 'public'
+
+  parsed = parse_method_signature(decl)
+  return false unless parsed
+
+  params = parsed[:params]
+  return false if params.empty?
+
+  first_type = normalized_cpp_type_name(params.first[:type])
+  return false unless first_type == 'QWidget*'
+
+  params.drop(1).all? { |param| param[:has_default] }
+end
+
+def build_base_specs(ast)
+  specs = [QAPPLICATION_SPEC.dup]
+
+  TARGET_QT_CLASSES.each do |qt_class|
+    ctor_decls = collect_constructor_decls(ast, qt_class)
+    supports_parent = ctor_decls.any? { |decl| constructor_supports_parent_only?(decl) }
+    parent_ctor = supports_parent
+    widget_child = qt_class != 'QWidget' && class_inherits?(ast, qt_class, 'QWidget')
+
+    specs << {
+      qt_class: qt_class,
+      ruby_class: qt_class,
+      include: qt_class,
+      prefix: prefix_for_qt_class(qt_class),
+      constructor: parent_ctor ? { parent: true, parent_type: 'QWidget*', register_in_parent: widget_child } : { parent: false },
+      methods: [],
+      auto_methods: :all,
+      auto_method_rules: {},
+      validate: { constructors: [qt_class], methods: [] }
+    }
+  end
+
+  specs
 end
 
 def class_has_method?(ast, class_name, method_name)
@@ -1062,8 +1199,9 @@ end
 
 total_start = monotonic_now
 ast = timed('ast_dump_total') { ast_dump }
-timed('validate_qt_api') { validate_qt_api!(ast, CLASS_SPECS) }
-expanded_specs = timed('expand_auto_methods') { expand_auto_methods(CLASS_SPECS, ast) }
+base_specs = timed('build_base_specs') { build_base_specs(ast) }
+timed('validate_qt_api') { validate_qt_api!(ast, base_specs) }
+expanded_specs = timed('expand_auto_methods') { expand_auto_methods(base_specs, ast) }
 effective_specs = timed('enrich_specs_with_properties') { enrich_specs_with_properties(expanded_specs, ast) }
 super_qt_by_qt, wrapper_qt_classes = timed('build_generated_inheritance') { build_generated_inheritance(ast, effective_specs) }
 

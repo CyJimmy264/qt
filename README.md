@@ -161,8 +161,7 @@ Everything generated/build-related is under `build/` and should stay out of git.
 ## Layout
 
 - `lib/qt` public Ruby API
-- `scripts/specs/qt_widgets.rb` generation spec
-- `scripts/generate_bridge.rb` bridge generator
+- `scripts/generate_bridge.rb` AST-driven bridge generator
 - `ext/qt_ruby_bridge` native extension entrypoint
 - `build/generated` generated sources
 - `build/qt` compiled bridge `.so`

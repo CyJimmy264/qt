@@ -15,14 +15,22 @@
 - Project is a Ruby-to-Qt bridge (`qt` gem name).
 - Generated artifacts live under `build/` and are not source-of-truth.
 - Source-of-truth:
-  - `scripts/specs/qt_widgets.rb` (class/method spec)
-  - `scripts/generate_bridge.rb` (generator)
+  - `scripts/generate_bridge.rb` (AST-driven generator + universal policy)
 - `lib/qt/native.rb` must remain a thin FFI wrapper over generated bridge API.
 - Build flow:
   - `ruby scripts/generate_bridge.rb`
   - `bundle exec rake compile`
   - Verification flow is strictly sequential: never run `compile` and `test` in parallel.
   - Always run `bundle exec rake compile` first, then `bundle exec rake test`.
+
+## Universal Generation Contract
+- Target direction: universal AST-driven policy, not per-class manual method curation.
+- Keep per-class exceptions minimal and temporary (only unavoidable bootstrap/special-cases).
+- Candidate methods: public only, non-deprecated, non-operator, non-internal/event/metaobject hooks.
+- Candidate signatures: FFI-safe types only (int/bool/QString/pointer + explicitly supported enum casts).
+- Default arguments must be respected in generated Ruby method signatures.
+- Ruby API must be Ruby-safe by construction (keyword-safe method/argument names).
+- Overload resolution must be deterministic and policy-driven, not class-by-class hand tuning.
 
 ## Inheritance Model
 - Ruby classes are generated with Qt-based inheritance derived from AST.
