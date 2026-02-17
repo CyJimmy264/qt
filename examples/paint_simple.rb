@@ -16,6 +16,9 @@ LEFT_BUTTON = 1
 RIGHT_BUTTON = 2
 
 ERASE_STYLE = 'background-color: #ffffff; border: 1px solid #f1f1f1;'
+TOOLBAR_STYLE = 'background-color: #f7f7f7; border: 1px solid #d8d8d8;'
+STATUS_STYLE = 'background-color: #ffffff; border: 1px solid #c7c7c7; color: #111111; font-weight: 700; font-size: 12px;'
+CLEAR_STYLE = 'background-color: #ffffff; border: 1px solid #c7c7c7; color: #111111; font-weight: 800; font-size: 12px;'
 PALETTE = [
   { name: 'Black', style: 'background-color: #111111; border: 1px solid #111111;' },
   { name: 'Blue', style: 'background-color: #1e66f5; border: 1px solid #1e66f5;' },
@@ -32,12 +35,12 @@ end
 
 toolbar_bg = QLabel.new(window)
 toolbar_bg.set_geometry(0, 0, WINDOW_WIDTH, TOOLBAR_HEIGHT)
-toolbar_bg.set_style_sheet('background-color: #f7f7f7; border: 1px solid #d8d8d8;')
+toolbar_bg.set_style_sheet(TOOLBAR_STYLE)
 
 status = QLabel.new(window)
 status.set_geometry(10, 8, 260, 28)
 status.set_alignment(Qt::AlignCenter)
-status.set_style_sheet('background-color: #ffffff; border: 1px solid #d8d8d8;')
+status.set_style_sheet(STATUS_STYLE)
 
 swatches = []
 PALETTE.each_with_index do |entry, i|
@@ -51,7 +54,7 @@ clear_button = QLabel.new(window)
 clear_button.set_geometry(285 + PALETTE.length * 34 + 12, 7, 100, 28)
 clear_button.set_text('CLEAR')
 clear_button.set_alignment(Qt::AlignCenter)
-clear_button.set_style_sheet('background-color: #ffffff; border: 1px solid #c7c7c7;')
+clear_button.set_style_sheet(CLEAR_STYLE)
 
 cells = Array.new(ROWS) { Array.new(COLS) }
 ROWS.times do |row|
