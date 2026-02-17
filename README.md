@@ -143,7 +143,6 @@ Shape:
 
 ```bash
 ruby examples/development_ordered_demos/01_dsl_hello.rb
-ruby examples/development_ordered_demos/02_live_console.rb
 ruby examples/development_ordered_demos/03_live_layout_console.rb
 ```
 
