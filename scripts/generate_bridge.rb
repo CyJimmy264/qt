@@ -726,6 +726,7 @@ def generate_ruby_qapplication(lines, spec)
   lines << ''
   lines << '    attr_reader :handle'
   lines << '    include Inspectable'
+  lines << '    include ApplicationLifecycle'
   lines << ''
   lines << '    class << self'
   lines << '      def current'
@@ -756,8 +757,6 @@ def generate_ruby_qapplication(lines, spec)
 
   lines << '    end'
   lines << ''
-  append_block(lines, ruby_qapplication_instance_block)
-  append_block(lines, ruby_qapplication_dispose_block)
   lines << '  end'
   lines << ''
 end
@@ -820,38 +819,6 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
 
   lines << '  end'
   lines << ''
-end
-
-def ruby_qapplication_instance_block
-  <<~RUBY
-    def initialize(_argc = 0, _argv = [])
-      @windows = []
-      @handle = Native.qapplication_new
-      self.class.current = self
-    end
-
-    def register_window(window)
-      @windows << window unless @windows.include?(window)
-    end
-
-    def exec
-      @windows.each(&:show)
-      Native.qapplication_exec(@handle)
-    ensure
-      dispose
-    end
-  RUBY
-end
-
-def ruby_qapplication_dispose_block
-  <<~RUBY
-    def dispose
-      return if @handle.nil? || (@handle.respond_to?(:null?) && @handle.null?)
-
-      Native.qapplication_delete(@handle)
-      @handle = nil
-    end
-  RUBY
 end
 
 def generate_ruby_widgets(specs, super_qt_by_qt, wrapper_qt_classes)
