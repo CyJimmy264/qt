@@ -690,6 +690,7 @@ def generate_ruby_qapplication(lines, spec)
   lines << "    QT_API_PROPERTIES = #{properties.map(&:to_sym).inspect}.freeze"
   lines << ''
   lines << '    attr_reader :handle'
+  lines << '    include Inspectable'
   lines << ''
   lines << '    class << self'
   lines << '      def current'
@@ -721,7 +722,6 @@ def generate_ruby_qapplication(lines, spec)
   lines << '    end'
   lines << ''
   append_block(lines, ruby_qapplication_instance_block)
-  append_qinspect_block(lines, indent: '    ')
   append_block(lines, ruby_qapplication_dispose_block)
   lines << '  end'
   lines << ''
@@ -756,6 +756,7 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
   lines << ''
   lines << '    attr_reader :handle'
   lines << '    attr_reader :children' if spec[:ruby_class] == 'QWidget' || widget_based
+  lines << '    include Inspectable'
   lines << '    include EventRuntime::WidgetMethods'
   lines << ''
 
@@ -790,7 +791,6 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
     lines << ''
   end
 
-  append_qinspect_block(lines, indent: '    ')
   spec[:methods].each do |method|
     ruby_name = method[:ruby_name]
     snake_alias = to_snake(ruby_name)
@@ -814,35 +814,6 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
   end
 
   lines << '  end'
-  lines << ''
-end
-
-def append_qinspect_block(lines, indent:)
-  block = <<~RUBY
-    def q_inspect
-      property_values = {}
-      self.class::QT_API_PROPERTIES.each do |property|
-        begin
-          property_values[property] = public_send(property)
-        rescue StandardError => e
-          property_values[property] = { error: e.class.name, message: e.message }
-        end
-      end
-
-      {
-        qt_class: self.class::QT_CLASS,
-        ruby_class: self.class.name,
-        handle: @handle,
-        qt_methods: self.class::QT_API_QT_METHODS,
-        ruby_methods: self.class::QT_API_RUBY_METHODS,
-        properties: property_values
-      }
-    end
-    alias_method :qt_inspect, :q_inspect
-    alias_method :to_h, :q_inspect
-  RUBY
-
-  block.lines.each { |line| lines << "#{indent}#{line.rstrip}" }
   lines << ''
 end
 
