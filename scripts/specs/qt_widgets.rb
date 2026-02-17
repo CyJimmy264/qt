@@ -25,58 +25,21 @@ module QtRubyGenerator
         include: 'QWidget',
         prefix: 'qwidget',
         constructor: { parent: true, parent_type: 'QWidget*' },
-        methods: [
-          {
-            qt_name: 'setWindowTitle',
-            ruby_name: 'setWindowTitle',
-            ffi_return: :void,
-            args: [{ name: 'title', ffi: :string, cast: :qstring }]
-          },
-          {
-            qt_name: 'resize',
-            ruby_name: 'resize',
-            ffi_return: :void,
-            args: [
-              { name: 'width', ffi: :int },
-              { name: 'height', ffi: :int }
-            ]
-          },
-          {
-            qt_name: 'setLayout',
-            ruby_name: 'setLayout',
-            ffi_return: :void,
-            args: [{ name: 'layout', ffi: :pointer, cast: 'QLayout*' }]
-          },
-          {
-            qt_name: 'setGeometry',
-            ruby_name: 'setGeometry',
-            ffi_return: :void,
-            args: [
-              { name: 'x', ffi: :int },
-              { name: 'y', ffi: :int },
-              { name: 'width', ffi: :int },
-              { name: 'height', ffi: :int }
-            ]
-          },
-          {
-            qt_name: 'setStyleSheet',
-            ruby_name: 'setStyleSheet',
-            ffi_return: :void,
-            args: [{ name: 'style', ffi: :string, cast: :qstring }]
-          },
-          {
-            qt_name: 'setFocusPolicy',
-            ruby_name: 'setFocusPolicy',
-            ffi_return: :void,
-            args: [{ name: 'policy', ffi: :int, cast: 'Qt::FocusPolicy' }]
-          },
-          { qt_name: 'show', ruby_name: 'show', ffi_return: :void, args: [] },
-          { qt_name: 'hide', ruby_name: 'hide', ffi_return: :void, args: [] },
-          { qt_name: 'isVisible', ruby_name: 'isVisible', ffi_return: :int, args: [] },
-          { qt_name: 'x', ruby_name: 'x', ffi_return: :int, args: [] },
-          { qt_name: 'y', ruby_name: 'y', ffi_return: :int, args: [] },
-          { qt_name: 'width', ruby_name: 'width', ffi_return: :int, args: [] },
-          { qt_name: 'height', ruby_name: 'height', ffi_return: :int, args: [] }
+        methods: [],
+        auto_methods: [
+          { qt_name: 'setWindowTitle', param_count: 1 },
+          { qt_name: 'resize', param_count: 2 },
+          { qt_name: 'setLayout', param_count: 1 },
+          { qt_name: 'setGeometry', param_count: 4 },
+          { qt_name: 'setStyleSheet', param_count: 1 },
+          { qt_name: 'setFocusPolicy', param_count: 1 },
+          { qt_name: 'show', param_count: 0 },
+          { qt_name: 'hide', param_count: 0 },
+          { qt_name: 'isVisible', param_count: 0 },
+          { qt_name: 'x', param_count: 0 },
+          { qt_name: 'y', param_count: 0 },
+          { qt_name: 'width', param_count: 0 },
+          { qt_name: 'height', param_count: 0 }
         ],
         validate: { constructors: ['QWidget'], methods: ['setWindowTitle', 'resize', 'setLayout', 'setGeometry', 'setStyleSheet', 'show', 'hide', 'isVisible', 'x', 'y', 'width', 'height'] }
       },
@@ -86,19 +49,10 @@ module QtRubyGenerator
         include: 'QLabel',
         prefix: 'qlabel',
         constructor: { parent: true, parent_type: 'QWidget*', register_in_parent: true },
-        methods: [
-          {
-            qt_name: 'setText',
-            ruby_name: 'setText',
-            ffi_return: :void,
-            args: [{ name: 'text', ffi: :string, cast: :qstring }]
-          },
-          {
-            qt_name: 'setAlignment',
-            ruby_name: 'setAlignment',
-            ffi_return: :void,
-            args: [{ name: 'alignment', ffi: :int, cast: :alignment }]
-          }
+        methods: [],
+        auto_methods: [
+          { qt_name: 'setText', param_count: 1 },
+          { qt_name: 'setAlignment', param_count: 1, param_types: ['Qt::Alignment'] }
         ],
         validate: { constructors: ['QLabel'], methods: ['setText', 'setAlignment'] }
       },
@@ -108,19 +62,10 @@ module QtRubyGenerator
         include: 'QPushButton',
         prefix: 'qpush_button',
         constructor: { parent: true, parent_type: 'QWidget*', register_in_parent: true },
-        methods: [
-          {
-            qt_name: 'setText',
-            ruby_name: 'setText',
-            ffi_return: :void,
-            args: [{ name: 'text', ffi: :string, cast: :qstring }]
-          },
-          {
-            qt_name: 'click',
-            ruby_name: 'click',
-            ffi_return: :void,
-            args: []
-          }
+        methods: [],
+        auto_methods: [
+          { qt_name: 'setText', param_count: 1 },
+          { qt_name: 'click', param_count: 0 }
         ],
         validate: { constructors: ['QPushButton'], methods: [] }
       },
@@ -130,19 +75,10 @@ module QtRubyGenerator
         include: 'QLineEdit',
         prefix: 'qline_edit',
         constructor: { parent: true, parent_type: 'QWidget*', register_in_parent: true },
-        methods: [
-          {
-            qt_name: 'setText',
-            ruby_name: 'setText',
-            ffi_return: :void,
-            args: [{ name: 'text', ffi: :string, cast: :qstring }]
-          },
-          {
-            qt_name: 'setPlaceholderText',
-            ruby_name: 'setPlaceholderText',
-            ffi_return: :void,
-            args: [{ name: 'text', ffi: :string, cast: :qstring }]
-          }
+        methods: [],
+        auto_methods: [
+          { qt_name: 'setText', param_count: 1 },
+          { qt_name: 'setPlaceholderText', param_count: 1 }
         ],
         validate: { constructors: ['QLineEdit'], methods: [] }
       },
@@ -152,19 +88,10 @@ module QtRubyGenerator
         include: 'QVBoxLayout',
         prefix: 'qvbox_layout',
         constructor: { parent: true, parent_type: 'QWidget*', register_in_parent: false },
-        methods: [
-          {
-            qt_name: 'addWidget',
-            ruby_name: 'addWidget',
-            ffi_return: :void,
-            args: [{ name: 'widget', ffi: :pointer, cast: 'QWidget*' }]
-          },
-          {
-            qt_name: 'removeWidget',
-            ruby_name: 'removeWidget',
-            ffi_return: :void,
-            args: [{ name: 'widget', ffi: :pointer, cast: 'QWidget*' }]
-          }
+        methods: [],
+        auto_methods: [
+          { qt_name: 'addWidget', param_count: 1 },
+          { qt_name: 'removeWidget', param_count: 1 }
         ],
         validate: { constructors: ['QVBoxLayout'], methods: [] }
       },
@@ -174,32 +101,22 @@ module QtRubyGenerator
         include: 'QTableWidget',
         prefix: 'qtable_widget',
         constructor: { parent: true, parent_type: 'QWidget*', register_in_parent: true },
-        methods: [
-          { qt_name: 'setColumnCount', ruby_name: 'setColumnCount', ffi_return: :void, args: [{ name: 'count', ffi: :int }] },
-          { qt_name: 'setRowCount', ruby_name: 'setRowCount', ffi_return: :void, args: [{ name: 'count', ffi: :int }] },
-          { qt_name: 'setColumnWidth', ruby_name: 'setColumnWidth', ffi_return: :void, args: [{ name: 'column', ffi: :int }, { name: 'width', ffi: :int }] },
-          { qt_name: 'setRowHeight', ruby_name: 'setRowHeight', ffi_return: :void, args: [{ name: 'row', ffi: :int }, { name: 'height', ffi: :int }] },
-          { qt_name: 'setVerticalScrollMode', ruby_name: 'setVerticalScrollMode', ffi_return: :void, args: [{ name: 'mode', ffi: :int, cast: 'QAbstractItemView::ScrollMode' }] },
-          { qt_name: 'setHorizontalScrollBarPolicy', ruby_name: 'setHorizontalScrollBarPolicy', ffi_return: :void, args: [{ name: 'policy', ffi: :int, cast: 'Qt::ScrollBarPolicy' }] },
-          { qt_name: 'clearContents', ruby_name: 'clearContents', ffi_return: :void, args: [] },
-          {
-            qt_name: 'setCellWidget',
-            ruby_name: 'setCellWidget',
-            ffi_return: :void,
-            args: [
-              { name: 'row', ffi: :int },
-              { name: 'column', ffi: :int },
-              { name: 'widget', ffi: :pointer, cast: 'QWidget*' }
-            ]
-          }
-        ],
+        methods: [],
         auto_methods: [
+          { qt_name: 'setColumnCount', param_count: 1 },
+          { qt_name: 'setRowCount', param_count: 1 },
+          { qt_name: 'setColumnWidth', param_count: 2 },
+          { qt_name: 'setRowHeight', param_count: 2 },
+          { qt_name: 'setVerticalScrollMode', param_count: 1, arg_casts: ['QAbstractItemView::ScrollMode'] },
+          { qt_name: 'setHorizontalScrollBarPolicy', param_count: 1 },
           { qt_name: 'setHorizontalHeaderItem', param_count: 2 },
           { qt_name: 'setItem', param_count: 3 },
           { qt_name: 'item', param_count: 2 },
           { qt_name: 'setCurrentCell', param_count: 2 },
           { qt_name: 'currentRow', param_count: 0 },
-          { qt_name: 'currentColumn', param_count: 0 }
+          { qt_name: 'currentColumn', param_count: 0 },
+          { qt_name: 'clearContents', param_count: 0 },
+          { qt_name: 'setCellWidget', param_count: 3 }
         ],
         validate: { constructors: ['QTableWidget'], methods: [] }
       },
@@ -223,19 +140,10 @@ module QtRubyGenerator
         include: 'QScrollArea',
         prefix: 'qscroll_area',
         constructor: { parent: true, parent_type: 'QWidget*', register_in_parent: true },
-        methods: [
-          {
-            qt_name: 'setWidgetResizable',
-            ruby_name: 'setWidgetResizable',
-            ffi_return: :void,
-            args: [{ name: 'resizable', ffi: :int, cast: 'bool' }]
-          },
-          {
-            qt_name: 'setWidget',
-            ruby_name: 'setWidget',
-            ffi_return: :void,
-            args: [{ name: 'widget', ffi: :pointer, cast: 'QWidget*' }]
-          }
+        methods: [],
+        auto_methods: [
+          { qt_name: 'setWidgetResizable', param_count: 1 },
+          { qt_name: 'setWidget', param_count: 1 }
         ],
         validate: { constructors: ['QScrollArea'], methods: [] }
       }

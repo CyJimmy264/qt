@@ -148,22 +148,60 @@ def collect_class_api(ast, class_name)
   { methods: methods.uniq, constructors: ctors.uniq }
 end
 
-def collect_method_decls(ast, class_name, method_name)
-  decls = []
+def ast_class_index(ast)
+  @ast_class_index_cache ||= {}
+  cached = @ast_class_index_cache[ast.object_id]
+  return cached if cached
+
+  methods_by_class = Hash.new { |h, k| h[k] = Hash.new { |h2, k2| h2[k2] = [] } }
+  bases_by_class = Hash.new { |h, k| h[k] = [] }
 
   walk_ast(ast) do |node|
     next unless node['kind'] == 'CXXRecordDecl'
-    next unless node['name'] == class_name
+
+    class_name = node['name']
+    next if class_name.nil? || class_name.empty?
+
+    Array(node['bases']).each do |base|
+      type_info = base['type'] || {}
+      raw = type_info['desugaredQualType'] || type_info['qualType']
+      parsed_base = normalize_cpp_type_name(raw)
+      bases_by_class[class_name] << parsed_base if parsed_base && !parsed_base.empty?
+    end
 
     Array(node['inner']).each do |inner|
       next unless inner['kind'] == 'CXXMethodDecl'
-      next unless inner['name'] == method_name
+      next unless inner['name']
 
-      decls << inner
+      methods_by_class[class_name][inner['name']] << inner
     end
   end
 
-  decls
+  bases_by_class.each_value(&:uniq!)
+
+  @ast_class_index_cache[ast.object_id] = {
+    methods_by_class: methods_by_class,
+    bases_by_class: bases_by_class
+  }
+end
+
+def collect_method_decls(ast, class_name, method_name)
+  index = ast_class_index(ast)
+  index[:methods_by_class].dig(class_name, method_name) || []
+end
+
+def collect_method_decls_with_bases(ast, class_name, method_name, visited = {})
+  return [] if class_name.nil? || class_name.empty? || visited[class_name]
+
+  visited[class_name] = true
+  all = collect_method_decls(ast, class_name, method_name)
+
+  bases = collect_class_bases(ast, class_name)
+  bases.each do |base|
+    all.concat(collect_method_decls_with_bases(ast, base, method_name, visited))
+  end
+
+  all
 end
 
 def map_cpp_arg_type(type_name)
@@ -186,6 +224,7 @@ def map_cpp_arg_type(type_name)
     { ffi: :int, cast: 'bool' }
   else
     return { ffi: :int, cast: type } if type.include?('::')
+    return { ffi: :int, cast: type } if type.match?(/\A[A-Z]\w*\z/)
 
     nil
   end
@@ -233,12 +272,14 @@ def build_auto_method_from_decl(method_decl, entry)
   ret_info = map_cpp_return_type(parsed[:return_type])
   return nil unless ret_info
 
-  args = parsed[:params].map do |param|
+  arg_cast_overrides = Array(entry[:arg_casts])
+  args = parsed[:params].each_with_index.map do |param, idx|
     arg_info = map_cpp_arg_type(param[:type])
     return nil unless arg_info
 
     arg_hash = { name: param[:name], ffi: arg_info[:ffi] }
-    arg_hash[:cast] = arg_info[:cast] if arg_info[:cast]
+    cast = arg_cast_overrides[idx] || arg_info[:cast]
+    arg_hash[:cast] = cast if cast
     arg_hash
   end
 
@@ -255,7 +296,7 @@ end
 def resolve_auto_method(ast, qt_class, auto_entry)
   entry = auto_entry.is_a?(String) ? { qt_name: auto_entry } : auto_entry.dup
   qt_name = entry.fetch(:qt_name)
-  decls = collect_method_decls(ast, qt_class, qt_name)
+  decls = collect_method_decls_with_bases(ast, qt_class, qt_name)
   return nil if decls.empty?
 
   built = decls.filter_map do |decl|
@@ -319,21 +360,8 @@ def normalize_cpp_type_name(raw)
 end
 
 def collect_class_bases(ast, class_name)
-  bases = []
-
-  walk_ast(ast) do |node|
-    next unless node['kind'] == 'CXXRecordDecl'
-    next unless node['name'] == class_name
-
-    Array(node['bases']).each do |inner|
-      type_info = inner['type'] || {}
-      raw = type_info['desugaredQualType'] || type_info['qualType']
-      base = normalize_cpp_type_name(raw)
-      bases << base if base && !base.empty?
-    end
-  end
-
-  bases.uniq
+  index = ast_class_index(ast)
+  Array(index[:bases_by_class][class_name]).uniq
 end
 
 def class_has_method?(ast, class_name, method_name)
