@@ -41,8 +41,6 @@
 
 ## Example App Guidance
 - `examples/development_ordered_demos/06_timetrap_clockify.rb` should keep scroll/state behavior in Ruby.
-- Do not place project demos/examples under any `qtproject` subdirectory.
-- Keep demo placement aligned with the existing repository structure under `examples/` (currently `examples/development_ordered_demos/`).
 - Avoid recreating `QScrollArea` content widget on each render when preserving scroll UX.
 - Prefer updating/reusing existing container and child widgets.
 
