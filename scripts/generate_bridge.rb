@@ -742,6 +742,7 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
   super_qt = super_qt_by_qt[spec[:qt_class]]
   super_ruby = super_qt ? qt_to_ruby[super_qt] : nil
   widget_based = spec[:qt_class] != 'QWidget' && widget_based_qt_class?(spec[:qt_class], super_qt_by_qt)
+  widget_root = spec[:ruby_class] == 'QWidget'
 
   class_decl = if super_ruby
                  "  class #{spec[:ruby_class]} < #{super_ruby}"
@@ -755,15 +756,16 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
   lines << "    QT_API_PROPERTIES = #{properties.map(&:to_sym).inspect}.freeze"
   lines << ''
   lines << '    attr_reader :handle'
-  lines << '    attr_reader :children' if spec[:ruby_class] == 'QWidget' || widget_based
+  lines << '    attr_reader :children' if widget_root
   lines << '    include Inspectable'
-  lines << '    include EventRuntime::WidgetMethods'
+  lines << '    include ChildrenTracking' if widget_root
+  lines << '    include EventRuntime::WidgetMethods' if widget_root
   lines << ''
 
   if spec[:constructor][:parent]
     lines << '    def initialize(parent = nil)'
     lines << "      @handle = Native.#{spec[:prefix]}_new(parent&.handle)"
-    lines << '      @children = []' if spec[:ruby_class] == 'QWidget' || widget_based
+    lines << '      init_children_tracking!' if widget_root
     if spec[:ruby_class] == 'QWidget'
       lines << '      if parent'
       lines << '        parent.add_child(self)'
@@ -782,14 +784,6 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
   lines << '      yield self if block_given?'
   lines << '    end'
   lines << ''
-
-  if spec[:ruby_class] == 'QWidget' || widget_based
-    lines << '    def add_child(child)'
-    lines << '      @children ||= []'
-    lines << '      @children << child'
-    lines << '    end'
-    lines << ''
-  end
 
   spec[:methods].each do |method|
     ruby_name = method[:ruby_name]
