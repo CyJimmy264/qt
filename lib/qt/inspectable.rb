@@ -5,11 +5,9 @@ module Qt
     def q_inspect_property_values
       property_values = {}
       self.class::QT_API_PROPERTIES.each do |property|
-        begin
-          property_values[property] = public_send(property)
-        rescue StandardError => e
-          property_values[property] = { error: e.class.name, message: e.message }
-        end
+        property_values[property] = public_send(property)
+      rescue StandardError => e
+        property_values[property] = { error: e.class.name, message: e.message }
       end
       property_values
     end

@@ -25,7 +25,7 @@ PROJECT_SLOT_COUNT = 14
 TIMETRAP_BIN = ENV.fetch('TIMETRAP_BIN', 't')
 TIMETRAP_API = defined?(Timetrap::Entry) && defined?(Timetrap::Timer)
 DEBUG_UI = ENV['TIMETRAP_UI_DEBUG'] == '1'
-AUTO_REFRESH_SEC = (Integer(ENV.fetch('TIMETRAP_UI_AUTO_REFRESH_SEC', '30')) rescue 30)
+AUTO_REFRESH_SEC = Integer(ENV.fetch('TIMETRAP_UI_AUTO_REFRESH_SEC', '30')) rescue 30
 
 BG_APP = 'background-color: #eef2f5; border: 1px solid #d6dde5;'
 BG_SIDEBAR = 'background-color: #f7f9fb; border-right: 1px solid #d9e0e7;'
@@ -206,14 +206,12 @@ collapse_all_btn.set_style_sheet(BTN_GHOST)
 collapse_all_btn.set_text('COLLAPSE ALL')
 
 run_t = lambda do |*args|
-  begin
-    out, st = Open3.capture2e(TIMETRAP_BIN, *args)
-    [st.success?, out]
-  rescue Errno::ENOENT
-    [false, "Command not found: #{TIMETRAP_BIN}"]
-  rescue StandardError => e
-    [false, "#{e.class}: #{e.message}"]
-  end
+  out, st = Open3.capture2e(TIMETRAP_BIN, *args)
+  [st.success?, out]
+rescue Errno::ENOENT
+  [false, "Command not found: #{TIMETRAP_BIN}"]
+rescue StandardError => e
+  [false, "#{e.class}: #{e.message}"]
 end
 
 dbg = lambda do |msg|
@@ -248,7 +246,7 @@ fetch_entries = lambda do
 
     begin
       parsed = JSON.parse(out)
-      return [] unless parsed.is_a?(Array)
+      next [] unless parsed.is_a?(Array)
 
       parsed.map do |e|
         {
@@ -314,10 +312,6 @@ end
 week_start_for = lambda do |entry|
   dt = entry[:start_time]&.to_date || Date.today
   dt - ((dt.wday + 6) % 7)
-end
-
-fmt_day = lambda do |entry|
-  (entry[:start_time] || Time.now).strftime('%a, %b %d')
 end
 
 fmt_range = lambda do |entry|
@@ -474,14 +468,14 @@ render_blocks = lambda do
         end
         y += 42
 
-        if expanded
-          group[:entries].sort_by { |e| e[:start_time] || Time.now }.reverse.each do |entry|
-            note = entry[:note].to_s.strip
-            note = '(no note)' if note.empty?
-            detail = "#{fmt_range.call(entry)}   #{seconds_to_hms.call(entry_seconds.call(entry))}   #{note[0, 80]}"
-            add_row_label.call(26, y, CONTENT_W - 78, 34, DETAIL_ROW, detail)
-            y += 36
-          end
+        next unless expanded
+
+        group[:entries].sort_by { |e| e[:start_time] || Time.now }.reverse.each do |entry|
+          note = entry[:note].to_s.strip
+          note = '(no note)' if note.empty?
+          detail = "#{fmt_range.call(entry)}   #{seconds_to_hms.call(entry_seconds.call(entry))}   #{note[0, 80]}"
+          add_row_label.call(26, y, CONTENT_W - 78, 34, DETAIL_ROW, detail)
+          y += 36
         end
       end
 
@@ -525,7 +519,6 @@ render_blocks = lambda do
     dbg.call("render sample #{sample.join(' | ')}")
     dbg.call("render visible window=#{window.is_visible} host=#{scroll_host.is_visible}")
   end
-
 end
 
 refresh_data = lambda do
@@ -537,7 +530,7 @@ refresh_data = lambda do
   projects = entries_cache.map { |e| split_sheet.call(e[:sheet]).first }.uniq
   selected_project = '* ALL' if selected_project != '* ALL' && !projects.include?(selected_project)
 
-  if active && active.respond_to?(:note)
+  if active.respond_to?(:note)
     txt = active.note.to_s.strip
     task_input.text = txt.empty? ? 'gui-clockify' : txt[0, 100]
   elsif task_input.text.to_s.strip.empty?

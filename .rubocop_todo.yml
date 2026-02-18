@@ -11,23 +11,6 @@ Gemspec/RequiredRubyVersion:
   Exclude:
     - 'qt.gemspec'
 
-# Offense count: 6
-# This cop supports safe autocorrection (--autocorrect).
-Layout/EmptyLineAfterGuardClause:
-  Exclude:
-    - 'examples/development_ordered_demos/03_component_showcase.rb'
-    - 'scripts/generate_bridge.rb'
-    - 'test/event_runtime_test.rb'
-
-# Offense count: 1
-# This cop supports safe autocorrection (--autocorrect).
-# Configuration parameters: EnforcedStyle.
-# SupportedStyles: empty_lines, no_empty_lines
-Layout/EmptyLinesAroundBlockBody:
-  Exclude:
-    - 'examples/development_ordered_demos/06_timetrap_clockify.rb'
-
-
 # Offense count: 1
 # Configuration parameters: IgnoreLiteralBranches, IgnoreConstantBranches, IgnoreDuplicateElseBranch.
 Lint/DuplicateBranch:
@@ -37,25 +20,6 @@ Lint/DuplicateBranch:
 # Offense count: 4
 Lint/HashCompareByIdentity:
   Exclude:
-    - 'scripts/generate_bridge.rb'
-
-# Offense count: 1
-Lint/NoReturnInBeginEndBlocks:
-  Exclude:
-    - 'examples/development_ordered_demos/06_timetrap_clockify.rb'
-
-# Offense count: 1
-# This cop supports safe autocorrection (--autocorrect).
-Lint/ScriptPermission:
-  Exclude:
-    - 'tools/metaobject_dump.rb'
-
-# Offense count: 3
-# This cop supports safe autocorrection (--autocorrect).
-Lint/UselessAssignment:
-  Exclude:
-    - 'examples/development_ordered_demos/01_dsl_hello.rb'
-    - 'examples/development_ordered_demos/06_timetrap_clockify.rb'
     - 'scripts/generate_bridge.rb'
 
 # Offense count: 12
@@ -139,14 +103,6 @@ Style/Documentation:
     - 'lib/qt/inspectable.rb'
     - 'lib/qt/native.rb'
 
-# Offense count: 1
-# This cop supports safe autocorrection (--autocorrect).
-# Configuration parameters: EnforcedStyle, AllowComments.
-# SupportedStyles: empty, nil, both
-Style/EmptyElse:
-  Exclude:
-    - 'examples/development_ordered_demos/02_live_layout_console.rb'
-
 # Offense count: 3
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: MaxUnannotatedPlaceholdersAllowed, Mode, AllowedMethods, AllowedPatterns.
@@ -175,19 +131,6 @@ Style/IfUnlessModifier:
     - 'ext/qt_ruby_bridge/extconf.rb'
     - 'scripts/generate_bridge.rb'
 
-# Offense count: 2
-Style/ItAssignment:
-  Exclude:
-    - 'examples/development_ordered_demos/03_component_showcase.rb'
-
-# Offense count: 1
-# This cop supports safe autocorrection (--autocorrect).
-# Configuration parameters: EnforcedStyle.
-# SupportedStyles: line_count_dependent, lambda, literal
-Style/Lambda:
-  Exclude:
-    - 'examples/development_ordered_demos/04_paint_simple.rb'
-
 # Offense count: 1
 Style/MultilineBlockChain:
   Exclude:
@@ -201,14 +144,6 @@ Style/MutableConstant:
   Exclude:
     - 'Rakefile'
 
-# Offense count: 1
-# This cop supports safe autocorrection (--autocorrect).
-# Configuration parameters: EnforcedStyle, MinBodyLength, AllowConsecutiveConditionals.
-# SupportedStyles: skip_modifier_ifs, always
-Style/Next:
-  Exclude:
-    - 'examples/development_ordered_demos/06_timetrap_clockify.rb'
-
 # Offense count: 6
 # This cop supports unsafe autocorrection (--autocorrect-all).
 # Configuration parameters: EnforcedStyle, AllowedMethods, AllowedPatterns.
@@ -218,31 +153,9 @@ Style/NumericPredicate:
     - 'spec/**/*'
     - 'examples/development_ordered_demos/05_tetris_simple.rb'
 
-# Offense count: 2
-# This cop supports safe autocorrection (--autocorrect).
-Style/RedundantBegin:
-  Exclude:
-    - 'examples/development_ordered_demos/06_timetrap_clockify.rb'
-    - 'lib/qt/inspectable.rb'
-
-# Offense count: 2
-# This cop supports safe autocorrection (--autocorrect).
-Style/RedundantParentheses:
-  Exclude:
-    - 'examples/development_ordered_demos/06_timetrap_clockify.rb'
-    - 'scripts/generate_bridge.rb'
-
 # Offense count: 4
 # This cop supports safe autocorrection (--autocorrect).
 Style/RescueModifier:
-  Exclude:
-    - 'examples/development_ordered_demos/06_timetrap_clockify.rb'
-
-# Offense count: 1
-# This cop supports unsafe autocorrection (--autocorrect-all).
-# Configuration parameters: ConvertCodeThatCanStartToReturnNil, AllowedMethods, MaxChainLength.
-# AllowedMethods: present?, blank?, presence, try, try!
-Style/SafeNavigation:
   Exclude:
     - 'examples/development_ordered_demos/06_timetrap_clockify.rb'
 

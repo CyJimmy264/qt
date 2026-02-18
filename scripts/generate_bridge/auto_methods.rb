@@ -280,6 +280,17 @@ def resolve_auto_method_cached(cache, cache_key)
   [true, cache[cache_key]]
 end
 
+def resolve_auto_method_cache(ast)
+  @resolve_auto_method_cache ||= {}.compare_by_identity
+  @resolve_auto_method_cache[ast] ||= {}
+end
+
+def cached_auto_method(per_ast_cache, qt_class, entry)
+  cache_key = resolve_auto_method_cache_key(qt_class, entry)
+  cache_hit, cached = resolve_auto_method_cached(per_ast_cache, cache_key)
+  [cache_key, cache_hit, cached]
+end
+
 def resolve_auto_method_built_candidates(ast, qt_class, entry)
   decls = collect_method_decls_with_bases(ast, qt_class, entry.fetch(:qt_name))
   return nil if decls.empty?
@@ -295,11 +306,9 @@ def resolve_auto_method_built_candidates(ast, qt_class, entry)
 end
 
 def resolve_auto_method(ast, qt_class, auto_entry)
-  @resolve_auto_method_cache ||= {}.compare_by_identity
   entry = resolve_auto_method_entry(auto_entry)
-  per_ast_cache = (@resolve_auto_method_cache[ast] ||= {})
-  cache_key = resolve_auto_method_cache_key(qt_class, entry)
-  cache_hit, cached = resolve_auto_method_cached(per_ast_cache, cache_key)
+  per_ast_cache = resolve_auto_method_cache(ast)
+  cache_key, cache_hit, cached = cached_auto_method(per_ast_cache, qt_class, entry)
   return cached if cache_hit
 
   built = resolve_auto_method_built_candidates(ast, qt_class, entry)

@@ -13,7 +13,7 @@ window = QWidget.new do |w|
   w.resize(width, height)
 end
 
-label = QLabel.new(window) do |l|
+QLabel.new(window) do |l|
   l.setText('Hello from Ruby')
   l.setAlignment(Qt::AlignCenter)
   l.setGeometry(0, 0, width, height)

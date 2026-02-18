@@ -161,10 +161,10 @@ perform_action = lambda do |key|
   when :theme
     dark = !dark
     apply_theme.call
-    items.each do |it|
-      next unless it.is_a?(QLabel)
+    items.each do |item|
+      next unless item.is_a?(QLabel)
 
-      it.set_style_sheet(dark ? CARD_DARK : CARD_LIGHT)
+      item.set_style_sheet(dark ? CARD_DARK : CARD_LIGHT)
     end
   when :inspect
     last = items.last
@@ -183,9 +183,9 @@ perform_action = lambda do |key|
     end
   when :clear
     until items.empty?
-      it = items.pop
-      layout.remove_widget(it)
-      it.hide
+      item = items.pop
+      layout.remove_widget(item)
+      item.hide
     end
   end
 
@@ -209,6 +209,7 @@ QApplication.process_events
 loop do
   QApplication.process_events
   break if window.is_visible.zero?
+
   sleep(0.01)
 end
 

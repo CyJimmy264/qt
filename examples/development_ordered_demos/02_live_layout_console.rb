@@ -76,8 +76,6 @@ console.define_singleton_method(:remove_last) do
       @layout.remove_widget(widget)
       widget.hide if widget.respond_to?(:hide)
       widget
-    else
-      nil
     end
   end
 end

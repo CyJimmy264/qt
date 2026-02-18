@@ -190,6 +190,7 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
     20.times do
       QApplication.process_events
       break unless payloads.empty?
+
       sleep(0.005)
     end
   end

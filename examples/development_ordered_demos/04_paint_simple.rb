@@ -86,7 +86,7 @@ clear_canvas = lambda do
   end
 end
 
-inside = lambda { |x, y, gx, gy, w, h| x >= gx && x < gx + w && y >= gy && y < gy + h }
+inside = ->(x, y, gx, gy, w, h) { x >= gx && x < gx + w && y >= gy && y < gy + h }
 
 paint_at = lambda do |x, y, erase|
   return unless inside.call(x, y, 0, TOOLBAR_HEIGHT, CANVAS_WIDTH, CANVAS_HEIGHT)
