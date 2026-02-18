@@ -228,6 +228,19 @@ def walk_ast_scoped(node, scope = [], &)
   Array(node['inner']).each { |child| walk_ast_scoped(child, local_scope, &) }
 end
 
+def ast_append_int_cast_type!(types, integer_alias_pattern, node, qualified)
+  case node['kind']
+  when 'EnumDecl'
+    types << qualified
+  when 'TypedefDecl', 'TypeAliasDecl'
+    aliased = node.dig('type', 'qualType').to_s.strip
+    return if aliased.empty?
+
+    types << qualified if aliased.match?(integer_alias_pattern)
+    types << qualified if aliased.include?('QFlags<')
+  end
+end
+
 def ast_int_cast_type_set(ast)
   @ast_int_cast_type_set_cache ||= {}
   cached = @ast_int_cast_type_set_cache[ast.object_id]
@@ -241,16 +254,7 @@ def ast_int_cast_type_set(ast)
     next if name.nil? || name.empty?
 
     qualified = (scope + [name]).join('::')
-    case node['kind']
-    when 'EnumDecl'
-      types << qualified
-    when 'TypedefDecl', 'TypeAliasDecl'
-      aliased = node.dig('type', 'qualType').to_s.strip
-      next if aliased.empty?
-
-      types << qualified if aliased.match?(integer_alias_pattern)
-      types << qualified if aliased.include?('QFlags<')
-    end
+    ast_append_int_cast_type!(types, integer_alias_pattern, node, qualified)
   end
 
   @ast_int_cast_type_set_cache[ast.object_id] = types
@@ -278,25 +282,36 @@ def ast_record_class_members(node, class_name, methods_by_class, ctors_by_class,
   ctor_decl_count = 0
 
   Array(node['inner']).each do |inner|
-    case inner['kind']
-    when 'AccessSpecDecl'
+    if inner['kind'] == 'AccessSpecDecl'
       current_access = inner['access'] if inner['access']
-    when 'CXXMethodDecl'
-      next unless inner['name']
-
-      access = inner['access'] || current_access
-      methods_by_class[class_name][inner['name']] << inner.merge('__effective_access' => access)
-      method_decl_count += 1
-    when 'CXXConstructorDecl'
-      next unless inner['name']
-
-      ctors_by_class[class_name] << inner['name']
-      ctor_decls_by_class[class_name] << inner.merge('__effective_access' => current_access)
-      ctor_decl_count += 1
+      next
     end
+
+    if ast_record_method_member?(inner, class_name, current_access, methods_by_class)
+      method_decl_count += 1
+      next
+    end
+
+    ctor_decl_count += 1 if ast_record_constructor_member?(inner, class_name, current_access, ctors_by_class, ctor_decls_by_class)
   end
 
   [method_decl_count, ctor_decl_count]
+end
+
+def ast_record_method_member?(inner, class_name, current_access, methods_by_class)
+  return false unless inner['kind'] == 'CXXMethodDecl' && inner['name']
+
+  access = inner['access'] || current_access
+  methods_by_class[class_name][inner['name']] << inner.merge('__effective_access' => access)
+  true
+end
+
+def ast_record_constructor_member?(inner, class_name, current_access, ctors_by_class, ctor_decls_by_class)
+  return false unless inner['kind'] == 'CXXConstructorDecl' && inner['name']
+
+  ctors_by_class[class_name] << inner['name']
+  ctor_decls_by_class[class_name] << inner.merge('__effective_access' => current_access)
+  true
 end
 
 def init_ast_class_index_data
@@ -651,32 +666,31 @@ def resolve_auto_methods_for_spec(ast, spec, auto_entries, manual_methods, auto_
 end
 
 def expand_auto_methods(specs, ast)
-  total_candidates = 0
-  total_resolved = 0
-  total_skipped = 0
+  totals = { candidates: 0, resolved: 0, skipped: 0 }
 
   specs.map do |spec|
-    spec_start = monotonic_now
-    auto_mode = spec[:auto_methods]
-    auto_entries = auto_entries_for_spec(spec, ast)
-    manual_methods = Array(spec[:methods])
-    next spec if auto_entries.empty?
-
-    spec_candidates = auto_entries.length
-    auto_methods, spec_resolved, spec_skipped = resolve_auto_methods_for_spec(
-      ast, spec, auto_entries, manual_methods, auto_mode
-    )
-
-    total_candidates += spec_candidates
-    total_resolved += spec_resolved
-    total_skipped += spec_skipped
-    elapsed = monotonic_now - spec_start
-    debug_log("auto #{spec[:qt_class]} mode=#{auto_mode || :list} candidates=#{spec_candidates} resolved=#{spec_resolved} skipped=#{spec_skipped} #{format('%.3fs', elapsed)}")
-
-    spec.merge(methods: manual_methods + auto_methods)
+    expand_auto_methods_for_spec(spec, ast, totals)
   end.tap do
-    debug_log("auto totals candidates=#{total_candidates} resolved=#{total_resolved} skipped=#{total_skipped}")
+    debug_log("auto totals candidates=#{totals[:candidates]} resolved=#{totals[:resolved]} skipped=#{totals[:skipped]}")
   end
+end
+
+def expand_auto_methods_for_spec(spec, ast, totals)
+  spec_start = monotonic_now
+  auto_mode = spec[:auto_methods]
+  auto_entries = auto_entries_for_spec(spec, ast)
+  manual_methods = Array(spec[:methods])
+  return spec if auto_entries.empty?
+
+  spec_candidates = auto_entries.length
+  auto_methods, spec_resolved, spec_skipped = resolve_auto_methods_for_spec(ast, spec, auto_entries, manual_methods, auto_mode)
+  totals[:candidates] += spec_candidates
+  totals[:resolved] += spec_resolved
+  totals[:skipped] += spec_skipped
+  elapsed = monotonic_now - spec_start
+  debug_log("auto #{spec[:qt_class]} mode=#{auto_mode || :list} candidates=#{spec_candidates} resolved=#{spec_resolved} skipped=#{spec_skipped} #{format('%.3fs', elapsed)}")
+
+  spec.merge(methods: manual_methods + auto_methods)
 end
 
 def normalize_cpp_type_name(raw)
@@ -744,22 +758,28 @@ def discover_target_qt_classes(ast, scope)
   case scope
   when 'widgets'
     all_classes.select do |qt_class|
-      next false if qt_class.end_with?('Private')
-      next false if qt_class == 'QApplication'
-      next false if abstract_class?(ast, qt_class)
+      next false unless widget_target_qt_class?(ast, qt_class)
 
-      widget_related =
-        class_inherits?(ast, qt_class, 'QWidget') ||
-        class_inherits?(ast, qt_class, 'QLayout') ||
-        qt_class == 'QTableWidgetItem'
-      next false unless widget_related
-
-      ctor_decls = collect_constructor_decls(ast, qt_class)
-      ctor_decls.any? { |decl| constructor_supports_parent_only?(decl) || constructor_supports_no_args?(decl) }
+      constructor_usable_for_codegen?(ast, qt_class)
     end.sort
   else
     raise "Unsupported QT_RUBY_SCOPE=#{scope.inspect}. Supported: #{SUPPORTED_SCOPES.join(', ')}"
   end
+end
+
+def widget_target_qt_class?(ast, qt_class)
+  return false if qt_class.end_with?('Private')
+  return false if qt_class == 'QApplication'
+  return false if abstract_class?(ast, qt_class)
+
+  class_inherits?(ast, qt_class, 'QWidget') ||
+    class_inherits?(ast, qt_class, 'QLayout') ||
+    qt_class == 'QTableWidgetItem'
+end
+
+def constructor_usable_for_codegen?(ast, qt_class)
+  ctor_decls = collect_constructor_decls(ast, qt_class)
+  ctor_decls.any? { |decl| constructor_supports_parent_only?(decl) || constructor_supports_no_args?(decl) }
 end
 
 def build_base_specs(ast)
@@ -957,30 +977,42 @@ def arg_expr(arg)
   end
 end
 
-def generate_cpp_constructor(lines, spec)
-  name = ctor_function_name(spec)
+def emit_cpp_qapplication_constructor(lines, name)
+  lines << "extern \"C\" void* #{name}() {"
+  lines << '  static int argc = 1;'
+  lines << '  static char arg0[] = "qt-ruby";'
+  lines << '  static char* argv[] = {arg0, nullptr};'
+  lines << '  return new QApplication(argc, argv);'
+  lines << '}'
+end
 
-  if spec[:constructor][:mode] == :qapplication
-    lines << "extern \"C\" void* #{name}() {"
-    lines << '  static int argc = 1;'
-    lines << '  static char arg0[] = "qt-ruby";'
-    lines << '  static char* argv[] = {arg0, nullptr};'
-    lines << '  return new QApplication(argc, argv);'
-    lines << '}'
-    return
-  end
+def emit_cpp_default_constructor(lines, name, qt_class)
+  lines << "extern \"C\" void* #{name}() {"
+  lines << "  return new #{qt_class}();"
+  lines << '}'
+end
 
-  unless spec[:constructor][:parent]
-    lines << "extern \"C\" void* #{name}() {"
-    lines << "  return new #{spec[:qt_class]}();"
-    lines << '}'
-    return
-  end
-
+def emit_cpp_parent_constructor(lines, name, spec)
   lines << "extern \"C\" void* #{name}(void* parent_handle) {"
   lines << "  #{spec[:constructor][:parent_type].delete('*')}* parent = static_cast<#{spec[:constructor][:parent_type]}>(parent_handle);"
   lines << "  return new #{spec[:qt_class]}(parent);"
   lines << '}'
+end
+
+def generate_cpp_constructor(lines, spec)
+  name = ctor_function_name(spec)
+
+  if spec[:constructor][:mode] == :qapplication
+    emit_cpp_qapplication_constructor(lines, name)
+    return
+  end
+
+  unless spec[:constructor][:parent]
+    emit_cpp_default_constructor(lines, name, spec[:qt_class])
+    return
+  end
+
+  emit_cpp_parent_constructor(lines, name, spec)
 end
 
 def generate_cpp_delete(lines)

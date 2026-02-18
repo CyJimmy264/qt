@@ -65,22 +65,25 @@ module Qt
       handle = widget_handle(widget)
       raise ArgumentError, 'widget handle is required' unless handle
 
+      per_signal = prepare_signal_registration(handle, signal_name)
+      per_signal[:blocks] << block
+      true
+    end
+
+    def prepare_signal_registration(handle, signal_name)
       signal_key = signal_name.to_s
       raise ArgumentError, 'signal name is required' if signal_key.empty?
 
       @signal_handlers ||= {}
       per_widget = (@signal_handlers[handle.address] ||= {})
       per_signal = (per_widget[signal_key] ||= { index: nil, blocks: [] })
-
       if per_signal[:index].nil?
         index = Qt::Native.qobject_connect_signal(handle, signal_key)
         raise ArgumentError, "failed to connect signal #{signal_key.inspect} (code=#{index})" if index.negative?
 
         per_signal[:index] = index
       end
-
-      per_signal[:blocks] << block
-      true
+      per_signal
     end
 
     def off_signal(widget, signal_name = nil)
@@ -130,16 +133,10 @@ module Qt
     def event_type_for(event_name)
       key = event_name.to_sym
       map = {
-        mouse_button_press: Qt::EventMouseButtonPress,
-        mouse_button_release: Qt::EventMouseButtonRelease,
-        mouse_move: Qt::EventMouseMove,
-        key_press: Qt::EventKeyPress,
-        key_release: Qt::EventKeyRelease,
-        focus_in: Qt::EventFocusIn,
-        focus_out: Qt::EventFocusOut,
-        enter: Qt::EventEnter,
-        leave: Qt::EventLeave,
-        resize: Qt::EventResize
+        mouse_button_press: Qt::EventMouseButtonPress, mouse_button_release: Qt::EventMouseButtonRelease,
+        mouse_move: Qt::EventMouseMove, key_press: Qt::EventKeyPress, key_release: Qt::EventKeyRelease,
+        focus_in: Qt::EventFocusIn, focus_out: Qt::EventFocusOut, enter: Qt::EventEnter,
+        leave: Qt::EventLeave, resize: Qt::EventResize
       }
       event_type = map[key]
       raise ArgumentError, "unknown event: #{event_name.inspect}" unless event_type
