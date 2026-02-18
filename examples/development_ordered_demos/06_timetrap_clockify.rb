@@ -84,6 +84,43 @@ PROJECT_ROW = 'background-color: #ffffff; border: 1px solid #d8e0ea; color: #0f1
 DETAIL_ROW = 'background-color: #f9fbfd; border: 1px solid #e3e8ef; color: #334155; ' \
              'font-size: 12px; padding-left: 24px;'
 
+# Builds filtered/grouped timetrap entries for UI rendering.
+class TimetrapRenderData
+  def initialize(split_sheet:, week_start_for:)
+    @split_sheet = split_sheet
+    @week_start_for = week_start_for
+  end
+
+  def filtered_entries(entries, selected_project)
+    return entries.dup if selected_project == '* ALL'
+
+    entries.select { |entry| @split_sheet.call(entry[:sheet]).first == selected_project }
+  end
+
+  def group_by_week(entries)
+    entries.each_with_object({}) do |entry, by_week|
+      week = @week_start_for.call(entry)
+      (by_week[week] ||= []) << entry
+    end
+  end
+
+  def group_by_day(entries)
+    entries.each_with_object({}) do |entry, by_day|
+      day = (entry[:start_time] || Time.now).to_date
+      (by_day[day] ||= []) << entry
+    end
+  end
+
+  def project_groups(entries)
+    by_project = entries.each_with_object({}) do |entry, grouped|
+      project, task = @split_sheet.call(entry[:sheet])
+      key = "#{project}\u0000#{task}"
+      (grouped[key] ||= { project: project, task: task, entries: [] })[:entries] << entry
+    end
+    by_project.values.sort_by { |group| [group[:project].downcase, group[:task].downcase] }
+  end
+end
+
 app = QApplication.new(0, [])
 window = QWidget.new do |w|
   w.set_window_title('Timetrap UI (Clockify-like)')
@@ -375,11 +412,7 @@ add_row_label = lambda do |x, y, w, h, style, text, center: false|
   label
 end
 
-filtered_entries_for_selection = lambda do |entries, selected|
-  return entries.dup if selected == '* ALL'
-
-  entries.select { |e| split_sheet.call(e[:sheet]).first == selected }
-end
+render_data = TimetrapRenderData.new(split_sheet: split_sheet, week_start_for: week_start_for)
 
 render_begin_log_text = lambda do |selected, all_count, filtered_count|
   "render begin selected=#{selected.inspect} entries_cache=#{all_count} filtered=#{filtered_count}"
@@ -411,21 +444,19 @@ render_geometry_log_text = lambda do |host_w, content_h|
     "host=#{geo.call(0, 0, host_w, content_h)}"
 end
 
-render_blocks = lambda do
+reset_render_widgets = lambda do
   render_widgets.each(&:hide)
   render_widgets.clear
+end
 
-  filtered = filtered_entries_for_selection.call(entries_cache, selected_project)
+render_blocks = lambda do
+  reset_render_widgets.call
+
+  filtered = render_data.filtered_entries(entries_cache, selected_project)
   dbg.call(render_begin_log_text.call(selected_project, entries_cache.length, filtered.length))
 
   recent = filtered.last(260).reverse
-
-  by_week = {}
-  recent.each do |entry|
-    ws = week_start_for.call(entry)
-    by_week[ws] ||= []
-    by_week[ws] << entry
-  end
+  by_week = render_data.group_by_week(recent)
 
   y = 10
   total_sec = 0
@@ -468,12 +499,7 @@ render_blocks = lambda do
     y += 52
     next unless week_expanded
 
-    by_day = {}
-    week_entries.each do |entry|
-      day_key = (entry[:start_time] || Time.now).to_date
-      by_day[day_key] ||= []
-      by_day[day_key] << entry
-    end
+    by_day = render_data.group_by_day(week_entries)
 
     by_day.keys.sort.reverse.each do |day|
       day_count += 1
@@ -485,15 +511,7 @@ render_blocks = lambda do
       )
       y += 42
 
-      by_project = {}
-      day_entries.each do |entry|
-        project, task = split_sheet.call(entry[:sheet])
-        key = "#{project}\u0000#{task}"
-        by_project[key] ||= { project: project, task: task, entries: [] }
-        by_project[key][:entries] << entry
-      end
-
-      by_project.values.sort_by { |g| [g[:project].downcase, g[:task].downcase] }.each do |group|
+      render_data.project_groups(day_entries).each do |group|
         project_group_count += 1
         p_total = group[:entries].sum { |e| entry_seconds.call(e) }
         exp_key = "#{day}|#{group[:project]}|#{group[:task]}"
