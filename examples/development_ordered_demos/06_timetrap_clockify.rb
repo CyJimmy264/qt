@@ -375,16 +375,48 @@ add_row_label = lambda do |x, y, w, h, style, text, center: false|
   label
 end
 
+filtered_entries_for_selection = lambda do |entries, selected|
+  return entries.dup if selected == '* ALL'
+
+  entries.select { |e| split_sheet.call(e[:sheet]).first == selected }
+end
+
+render_begin_log_text = lambda do |selected, all_count, filtered_count|
+  "render begin selected=#{selected.inspect} entries_cache=#{all_count} filtered=#{filtered_count}"
+end
+
+week_title_text = lambda do |week_marker, wk, week_sec|
+  "#{week_marker}  #{wk.strftime('%b %-d')} - #{(wk + 6).strftime('%b %-d')}         " \
+    "Week total: #{seconds_to_hms.call(week_sec)}"
+end
+
+project_row_text = lambda do |marker, group, p_total|
+  "#{marker}  #{group[:project]}  |  #{group[:task]}   " \
+    "(#{group[:entries].length} entries)   #{seconds_to_hms.call(p_total)}"
+end
+
+summary_text = lambda do |selected, filtered_count, total_sec|
+  "Selected: #{selected} | Entries: #{filtered_count} | Total: #{seconds_to_hms.call(total_sec)}"
+end
+
+render_done_log_text = lambda do |week_count, day_count, project_group_count, content_h,
+                                  total_widgets, lbl_count, btn_count, row_count|
+  "render done weeks=#{week_count} days=#{day_count} groups=#{project_group_count} " \
+    "content_h=#{content_h} widgets_total=#{total_widgets} labels=#{lbl_count} " \
+    "buttons=#{btn_count} click_rows=#{row_count}"
+end
+
+render_geometry_log_text = lambda do |host_w, content_h|
+  "render geometry scroll=#{geo.call(CONTENT_X, TOPBAR_H + 156, CONTENT_W, WINDOW_H - (TOPBAR_H + 170))} " \
+    "host=#{geo.call(0, 0, host_w, content_h)}"
+end
+
 render_blocks = lambda do
   render_widgets.each(&:hide)
   render_widgets.clear
 
-  filtered = if selected_project == '* ALL'
-               entries_cache.dup
-             else
-               entries_cache.select { |e| split_sheet.call(e[:sheet]).first == selected_project }
-             end
-  dbg.call("render begin selected=#{selected_project.inspect} entries_cache=#{entries_cache.length} filtered=#{filtered.length}")
+  filtered = filtered_entries_for_selection.call(entries_cache, selected_project)
+  dbg.call(render_begin_log_text.call(selected_project, entries_cache.length, filtered.length))
 
   recent = filtered.last(260).reverse
 
@@ -415,7 +447,7 @@ render_blocks = lambda do
     week_label = QLabel.new(scroll_host)
     week_label.set_geometry(10, y, CONTENT_W - 162, 44)
     week_label.set_style_sheet(WEEK_STYLE)
-    week_label.set_text("#{week_marker}  #{wk.strftime('%b %-d')} - #{(wk + 6).strftime('%b %-d')}         Week total: #{seconds_to_hms.call(week_sec)}")
+    week_label.set_text(week_title_text.call(week_marker, wk, week_sec))
     week_label.show
     render_widgets << week_label
 
@@ -472,7 +504,7 @@ render_blocks = lambda do
         row = QLabel.new(scroll_host)
         row.set_geometry(18, y, CONTENT_W - 62, 40)
         row.set_style_sheet(PROJECT_ROW)
-        row.set_text("#{marker}  #{group[:project]}  |  #{group[:task]}   (#{group[:entries].length} entries)   #{seconds_to_hms.call(p_total)}")
+        row.set_text(project_row_text.call(marker, group, p_total))
         row.show
         render_widgets << row
         row.on(:mouse_button_release) do |_ev|
@@ -506,7 +538,7 @@ render_blocks = lambda do
     dbg.call("render empty for selected=#{selected_project.inspect}")
   end
 
-  summary.set_text("Selected: #{selected_project} | Entries: #{filtered.length} | Total: #{seconds_to_hms.call(total_sec)}")
+  summary.set_text(summary_text.call(selected_project, filtered.length, total_sec))
   project_pill.set_text("Project: #{selected_project[0, 20]}")
   last_week_keys = week_keys_this_render
   last_project_keys = project_keys_this_render
@@ -516,8 +548,12 @@ render_blocks = lambda do
   btn_count = render_widgets.count { |w| w.is_a?(QPushButton) }
   row_count = render_widgets.count { |w| w.is_a?(QLabel) && w.respond_to?(:on) }
   lbl_count = render_widgets.count { |w| w.is_a?(QLabel) }
-  dbg.call("render done weeks=#{week_count} days=#{day_count} groups=#{project_group_count} content_h=#{content_h} widgets_total=#{render_widgets.length} labels=#{lbl_count} buttons=#{btn_count} click_rows=#{row_count}")
-  dbg.call("render geometry scroll=#{geo.call(CONTENT_X, TOPBAR_H + 156, CONTENT_W, WINDOW_H - (TOPBAR_H + 170))} host=#{geo.call(0, 0, host_w, content_h)}")
+  dbg.call(
+    render_done_log_text.call(
+      week_count, day_count, project_group_count, content_h, render_widgets.length, lbl_count, btn_count, row_count
+    )
+  )
+  dbg.call(render_geometry_log_text.call(host_w, content_h))
   if DEBUG_UI
     sample = render_widgets.first(3).map do |w|
       t =
