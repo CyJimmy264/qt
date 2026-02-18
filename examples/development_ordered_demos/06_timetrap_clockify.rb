@@ -119,7 +119,7 @@ project_title.set_style_sheet(MUTED)
 project_title.set_text('PROJECTS')
 
 project_slots = Array.new(PROJECT_SLOT_COUNT) do |i|
-  y = 316 + i * 34
+  y = 316 + (i * 34)
   view = QPushButton.new(window)
   view.set_geometry(12, y, SIDEBAR_W - 24, 30)
   view.set_style_sheet(PROJ_ITEM)

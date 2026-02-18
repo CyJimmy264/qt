@@ -95,7 +95,7 @@ layout_ui = lambda do
 
   right.set_geometry(sidebar_x, 0, SIDEBAR_W, wh)
   actions.each_with_index do |action, idx|
-    action[:view].set_geometry(sidebar_x + 18, 28 + idx * 52, SIDEBAR_W - 36, 40)
+    action[:view].set_geometry(sidebar_x + 18, 28 + (idx * 52), SIDEBAR_W - 36, 40)
   end
   status.set_geometry(sidebar_x + 18, wh - 84, SIDEBAR_W - 36, 56)
 end

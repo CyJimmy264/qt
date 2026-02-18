@@ -6,6 +6,7 @@ require 'rbconfig'
 module Qt
   module Bridge
     extend FFI::Library
+
     module_function
 
     def load!

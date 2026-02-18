@@ -3,7 +3,6 @@
 
 require 'fileutils'
 require 'json'
-require 'set'
 require 'tempfile'
 
 ROOT = File.expand_path('..', __dir__)
@@ -209,14 +208,14 @@ def ast_dump
   end
 end
 
-def walk_ast(node, &block)
+def walk_ast(node, &)
   return unless node.is_a?(Hash)
 
   yield node
-  Array(node['inner']).each { |child| walk_ast(child, &block) }
+  Array(node['inner']).each { |child| walk_ast(child, &) }
 end
 
-def walk_ast_scoped(node, scope = [], &block)
+def walk_ast_scoped(node, scope = [], &)
   return unless node.is_a?(Hash)
 
   local_scope = scope
@@ -226,7 +225,7 @@ def walk_ast_scoped(node, scope = [], &block)
   end
 
   yield node, local_scope
-  Array(node['inner']).each { |child| walk_ast_scoped(child, local_scope, &block) }
+  Array(node['inner']).each { |child| walk_ast_scoped(child, local_scope, &) }
 end
 
 def ast_int_cast_type_set(ast)
@@ -569,7 +568,7 @@ def expand_auto_methods(specs, ast)
     spec_resolved = 0
     spec_skipped = 0
 
-    existing_names = manual_methods.map { |m| m[:qt_name] }.to_set
+    existing_names = manual_methods.to_set { |m| m[:qt_name] }
     auto_methods = auto_entries.filter_map do |entry|
       qt_name = entry.is_a?(String) ? entry : entry[:qt_name]
       if existing_names.include?(qt_name)
@@ -916,9 +915,7 @@ def generate_cpp_method(lines, spec, method)
              '    return;'
            when :int
              '    return -1;'
-           when :pointer
-             '    return nullptr;'
-           when :string
+           when :pointer, :string
              '    return nullptr;'
            else
              '    return;'
@@ -946,8 +943,7 @@ def generate_cpp_method(lines, spec, method)
 end
 
 def generate_cpp_bridge(specs)
-  lines = []
-  required_includes(GENERATOR_SCOPE).each { |inc| lines << "#include <#{inc}>" }
+  lines = required_includes(GENERATOR_SCOPE).map { |inc| "#include <#{inc}>" }
   append_block(lines, cpp_bridge_prelude)
 
   specs.each do |spec|
@@ -1081,8 +1077,7 @@ def append_ruby_native_call_method(lines, method:, native_call:, indent:)
         case arg[:ffi]
         when :int then "(#{safe}.nil? ? 0 : #{safe})"
         when :pointer then safe
-        when :string then "(#{safe}.nil? ? '' : #{safe})"
-        else safe
+        else "(#{safe}.nil? ? '' : #{safe})"
         end
       else
         safe

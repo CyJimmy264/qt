@@ -53,7 +53,7 @@ module Qt
               raise ArgumentError, "wrong number of arguments (given #{args.length}, expected #{signature.length})"
             end
 
-            args = args + [nil] * (signature.length - args.length)
+            args = args + ([nil] * (signature.length - args.length))
           elsif args.length > signature.length
             raise ArgumentError, "wrong number of arguments (given #{args.length}, expected #{signature.length})"
           end

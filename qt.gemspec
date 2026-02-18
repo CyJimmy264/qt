@@ -26,7 +26,5 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
 
   spec.add_dependency 'ffi', '~> 1.17'
-  spec.add_development_dependency 'rake', '~> 13.0'
-  spec.add_development_dependency 'minitest', '~> 5.20'
-  spec.add_development_dependency 'rubocop', '~> 1.76'
+  spec.metadata['rubygems_mfa_required'] = 'true'
 end

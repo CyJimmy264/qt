@@ -150,7 +150,9 @@ module Qt
     def ensure_event_callback!
       return if @event_callback
 
-      @event_callback = FFI::Function.new(:void, %i[pointer int int int int int]) do |object_handle, event_type, a, b, c, d|
+      @event_callback = FFI::Function.new(
+        :void, %i[pointer int int int int int]
+      ) do |object_handle, event_type, a, b, c, d|
         next unless object_handle && @event_handlers
 
         per_widget = @event_handlers[object_handle.address]

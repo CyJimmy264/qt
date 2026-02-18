@@ -45,13 +45,13 @@ status.set_style_sheet(STATUS_STYLE)
 swatches = []
 PALETTE.each_with_index do |entry, i|
   swatch = QLabel.new(window)
-  swatch.set_geometry(285 + i * 34, 7, 28, 28)
+  swatch.set_geometry(285 + (i * 34), 7, 28, 28)
   swatch.set_style_sheet(entry[:style])
   swatches << swatch
 end
 
 clear_button = QLabel.new(window)
-clear_button.set_geometry(285 + PALETTE.length * 34 + 12, 7, 100, 28)
+clear_button.set_geometry(285 + (PALETTE.length * 34) + 12, 7, 100, 28)
 clear_button.set_text('CLEAR')
 clear_button.set_alignment(Qt::AlignCenter)
 clear_button.set_style_sheet(CLEAR_STYLE)
@@ -60,7 +60,7 @@ cells = Array.new(ROWS) { Array.new(COLS) }
 ROWS.times do |row|
   COLS.times do |col|
     pixel = QLabel.new(window)
-    pixel.set_geometry(col * CELL, TOOLBAR_HEIGHT + row * CELL, CELL, CELL)
+    pixel.set_geometry(col * CELL, TOOLBAR_HEIGHT + (row * CELL), CELL, CELL)
     pixel.set_style_sheet(ERASE_STYLE)
     cells[row][col] = pixel
   end
@@ -108,7 +108,7 @@ window.on(:mouse_button_press) do |evt|
 
   if button == LEFT_BUTTON
     swatches.each_with_index do |_swatch, idx|
-      sx = 285 + idx * 34
+      sx = 285 + (idx * 34)
       next unless inside.call(x, y, sx, 7, 28, 28)
 
       selected_index = idx
@@ -116,7 +116,7 @@ window.on(:mouse_button_press) do |evt|
       refresh_palette.call
     end
 
-    if inside.call(x, y, 285 + PALETTE.length * 34 + 12, 7, 100, 28)
+    if inside.call(x, y, 285 + (PALETTE.length * 34) + 12, 7, 100, 28)
       clear_canvas.call
       status.set_text("Color: #{PALETTE[selected_index][:name]} (canvas cleared)")
     end
@@ -130,9 +130,9 @@ window.on(:mouse_move) do |evt|
   y = evt[:b]
   buttons = evt[:d]
 
-  if (buttons & LEFT_BUTTON) != 0
+  if buttons.anybits?(LEFT_BUTTON)
     paint_at.call(x, y, false)
-  elsif (buttons & RIGHT_BUTTON) != 0
+  elsif buttons.anybits?(RIGHT_BUTTON)
     paint_at.call(x, y, true)
   end
 end

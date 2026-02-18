@@ -27,6 +27,8 @@ GEM_SPEC = Gem::Specification.load(GEMSPEC_PATH)
 GEM_FILE = "#{GEM_SPEC.name}-#{GEM_SPEC.version}.gem"
 PKG_DIR = File.expand_path('build/pkg', __dir__)
 PKG_FILE = File.join(PKG_DIR, GEM_FILE)
+GENERATED_CPP_PATH = File.expand_path('build/generated/qt_ruby_bridge.cpp', __dir__)
+NATIVE_CPP_PATH = File.join(NATIVE_BUILD_DIR, 'qt_ruby_bridge.cpp')
 
 desc 'Generate native bridge sources from system Qt headers'
 task :generate_bindings do
@@ -36,7 +38,7 @@ end
 desc 'Compile native Qt bridge'
 task compile: :generate_bindings do
   sh "mkdir -p #{NATIVE_BUILD_DIR}"
-  sh "cp #{File.expand_path('build/generated/qt_ruby_bridge.cpp', __dir__)} #{File.join(NATIVE_BUILD_DIR, 'qt_ruby_bridge.cpp')}"
+  sh "cp #{GENERATED_CPP_PATH} #{NATIVE_CPP_PATH}"
   sh "ruby #{File.join(EXT_DIR, 'extconf.rb')}", chdir: NATIVE_BUILD_DIR
   sh 'make', chdir: NATIVE_BUILD_DIR
   sh 'mkdir -p ../qt', chdir: NATIVE_BUILD_DIR

@@ -7,7 +7,7 @@ COLS = 10
 ROWS = 20
 CELL = 24
 PANEL_WIDTH = 180
-WINDOW_WIDTH = COLS * CELL + PANEL_WIDTH
+WINDOW_WIDTH = (COLS * CELL) + PANEL_WIDTH
 WINDOW_HEIGHT = ROWS * CELL
 
 EMPTY_STYLE = 'background-color: #fafafa; border: 1px solid #e6e6e6;'
@@ -75,27 +75,27 @@ side.set_geometry(COLS * CELL, 0, PANEL_WIDTH, WINDOW_HEIGHT)
 side.set_style_sheet(BORDER_STYLE)
 
 title = QLabel.new(window)
-title.set_geometry(COLS * CELL + 16, 16, PANEL_WIDTH - 32, 30)
+title.set_geometry((COLS * CELL) + 16, 16, PANEL_WIDTH - 32, 30)
 title.set_alignment(Qt::AlignCenter)
 title.set_text('TETRIS')
 title.set_style_sheet(TITLE_STYLE)
 
 score_label = QLabel.new(window)
-score_label.set_geometry(COLS * CELL + 16, 56, PANEL_WIDTH - 32, 30)
+score_label.set_geometry((COLS * CELL) + 16, 56, PANEL_WIDTH - 32, 30)
 score_label.set_alignment(Qt::AlignCenter)
 score_label.set_style_sheet(INFO_STYLE)
 
 status_label = QLabel.new(window)
-status_label.set_geometry(COLS * CELL + 16, 96, PANEL_WIDTH - 32, 30)
+status_label.set_geometry((COLS * CELL) + 16, 96, PANEL_WIDTH - 32, 30)
 status_label.set_alignment(Qt::AlignCenter)
 status_label.set_style_sheet(INFO_STYLE)
 
 buttons = [
-  { key: :left, text: 'LEFT', x: COLS * CELL + 16, y: 150, w: 70, h: 34 },
-  { key: :right, text: 'RIGHT', x: COLS * CELL + 94, y: 150, w: 70, h: 34 },
-  { key: :rotate, text: 'ROTATE', x: COLS * CELL + 16, y: 192, w: 148, h: 34 },
-  { key: :drop, text: 'DROP', x: COLS * CELL + 16, y: 234, w: 148, h: 34 },
-  { key: :new, text: 'NEW GAME', x: COLS * CELL + 16, y: 276, w: 148, h: 34 }
+  { key: :left, text: 'LEFT', x: (COLS * CELL) + 16, y: 150, w: 70, h: 34 },
+  { key: :right, text: 'RIGHT', x: (COLS * CELL) + 94, y: 150, w: 70, h: 34 },
+  { key: :rotate, text: 'ROTATE', x: (COLS * CELL) + 16, y: 192, w: 148, h: 34 },
+  { key: :drop, text: 'DROP', x: (COLS * CELL) + 16, y: 234, w: 148, h: 34 },
+  { key: :new, text: 'NEW GAME', x: (COLS * CELL) + 16, y: 276, w: 148, h: 34 }
 ]
 
 buttons.each do |btn|
@@ -280,7 +280,7 @@ loop do
         current = nil
       end
 
-      fall_interval = [0.12, 0.45 - lines * 0.01].max
+      fall_interval = [0.12, 0.45 - (lines * 0.01)].max
     end
 
     last_fall = Time.now
