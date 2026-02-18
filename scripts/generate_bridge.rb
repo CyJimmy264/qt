@@ -422,17 +422,27 @@ def map_cpp_pointer_arg_type(type_name, qt_class)
   { ffi: :pointer, cast: "#{base}*" }
 end
 
-def map_cpp_intlike_arg_type(type_name, qt_class, int_cast_types)
+def map_builtin_intlike_arg_type(type_name)
   return { ffi: :int } if type_name == 'int'
   return { ffi: :int, cast: 'bool' } if type_name == 'bool'
-  return { ffi: :int, cast: type_name } if type_name.include?('::') && int_cast_types&.include?(type_name)
 
+  nil
+end
+
+def map_qualified_intlike_arg_type(type_name, qt_class, int_cast_types)
   return nil unless qt_class && type_name.match?(/\A[A-Z]\w*\z/)
 
   qualified = "#{qt_class}::#{type_name}"
   return { ffi: :int, cast: qualified } if int_cast_types&.include?(qualified)
 
   nil
+end
+
+def map_cpp_intlike_arg_type(type_name, qt_class, int_cast_types)
+  builtin = map_builtin_intlike_arg_type(type_name)
+  return builtin if builtin
+  return { ffi: :int, cast: type_name } if type_name.include?('::') && int_cast_types&.include?(type_name)
+  map_qualified_intlike_arg_type(type_name, qt_class, int_cast_types)
 end
 
 def map_cpp_arg_type(type_name, qt_class: nil, int_cast_types: nil)
@@ -545,13 +555,25 @@ def build_auto_method_from_decl(method_decl, entry, qt_class:, int_cast_types:)
   build_auto_method_hash(entry, ret_info, args, parsed)
 end
 
-def auto_exportable_method_name?(name)
+def valid_auto_exportable_identifier?(name)
   return false if name.nil? || name.empty?
-  return false if name.start_with?('~')
-  return false if name.include?('operator')
   return false unless name.match?(/\A[A-Za-z_]\w*\z/)
-  return false if name.end_with?('Event')
-  return false if %w[event eventFilter childEvent customEvent timerEvent connectNotify disconnectNotify d_func connect disconnect].include?(name)
+
+  true
+end
+
+def forbidden_auto_exportable_method_name?(name)
+  return true if name.start_with?('~')
+  return true if name.include?('operator')
+  return true if name.end_with?('Event')
+  return true if %w[event eventFilter childEvent customEvent timerEvent connectNotify disconnectNotify d_func connect disconnect].include?(name)
+
+  false
+end
+
+def auto_exportable_method_name?(name)
+  return false unless valid_auto_exportable_identifier?(name)
+  return false if forbidden_auto_exportable_method_name?(name)
 
   true
 end
@@ -568,6 +590,27 @@ end
 
 def invalid_method_name_scope?(class_name, visited)
   class_name.nil? || class_name.empty? || visited[class_name]
+end
+
+def build_auto_method_candidate(decl, entry, qt_class, int_cast_types)
+  parsed = parse_method_signature(decl)
+  return nil unless parsed
+
+  method = build_auto_method_from_decl(decl, entry, qt_class: qt_class, int_cast_types: int_cast_types)
+  return nil unless method
+
+  {
+    method: method,
+    param_types: parsed[:params].map { |param| normalized_cpp_type_name(param[:type]) }
+  }
+end
+
+def auto_method_decl_candidate?(decl)
+  return false unless decl['__effective_access'] == 'public'
+  return false if deprecated_method_decl?(decl)
+  return false unless auto_exportable_method_name?(decl['name'])
+
+  true
 end
 
 def collect_method_names_with_bases(ast, class_name, visited = {})
@@ -606,20 +649,9 @@ end
 
 def build_auto_method_candidates(decls, entry, qt_class, int_cast_types)
   decls.filter_map do |decl|
-    next unless decl['__effective_access'] == 'public'
-    next if deprecated_method_decl?(decl)
-    next unless auto_exportable_method_name?(decl['name'])
+    next unless auto_method_decl_candidate?(decl)
 
-    parsed = parse_method_signature(decl)
-    next unless parsed
-
-    method = build_auto_method_from_decl(decl, entry, qt_class: qt_class, int_cast_types: int_cast_types)
-    next unless method
-
-    {
-      method: method,
-      param_types: parsed[:params].map { |param| normalized_cpp_type_name(param[:type]) }
-    }
+    build_auto_method_candidate(decl, entry, qt_class, int_cast_types)
   end
 end
 
@@ -871,6 +903,16 @@ def class_has_method?(ast, class_name, method_name)
   collect_class_api(ast, class_name)[:methods].include?(method_name)
 end
 
+def next_trace_base(fetch_bases, cur, visited)
+  bases = Array(fetch_bases.call(cur))
+  return nil if bases.empty?
+
+  base = bases.first
+  return nil if base.nil? || base.empty? || visited[base]
+
+  base
+end
+
 def trace_generated_super_chain(fetch_bases, known_qt, qt_class, super_qt_by_qt)
   return if qt_class == 'QApplication'
 
@@ -879,11 +921,8 @@ def trace_generated_super_chain(fetch_bases, known_qt, qt_class, super_qt_by_qt)
   cur = qt_class
 
   loop do
-    bases = Array(fetch_bases.call(cur))
-    break if bases.empty?
-
-    base = bases.first
-    break if base.nil? || base.empty? || visited[base]
+    base = next_trace_base(fetch_bases, cur, visited)
+    break unless base
 
     visited[base] = true
     super_qt_by_qt[prev] ||= base
@@ -977,17 +1016,21 @@ def enrich_spec_with_property_getter!(methods, ast, spec, method)
   property = property_name_from_setter(method[:qt_name])
   return unless property_candidate?(method, ast, spec, property)
 
-  existing_getter = methods.find { |m| m[:qt_name] == property && m[:args].empty? }
-  if existing_getter
-    existing_getter[:property] ||= property
-    return
-  end
+  return if attach_existing_property_getter?(methods, property)
 
   getter_decl = find_getter_decl(ast, spec[:qt_class], property)
   return unless getter_decl
 
   getter = build_property_getter_method(getter_decl, property)
   methods << getter if getter
+end
+
+def attach_existing_property_getter?(methods, property)
+  existing_getter = methods.find { |method| method[:qt_name] == property && method[:args].empty? }
+  return false unless existing_getter
+
+  existing_getter[:property] ||= property
+  true
 end
 
 def property_candidate?(method, ast, spec, property)

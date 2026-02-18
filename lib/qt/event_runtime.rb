@@ -150,16 +150,8 @@ module Qt
       @event_callback = FFI::Function.new(
         :void, %i[pointer int int int int int]
       ) do |object_handle, event_type, a, b, c, d|
-        next unless object_handle && @event_handlers
-
-        per_widget = @event_handlers[object_handle.address]
-        next unless per_widget
-
-        handlers = per_widget[event_type]
-        next unless handlers && !handlers.empty?
-
         payload = { type: event_type, a: a, b: b, c: c, d: d }
-        handlers.each { |handler| handler.call(payload) }
+        EventRuntimeDispatch.dispatch_event(@event_handlers, object_handle, event_type, payload)
       end
 
       Qt::Native.set_event_callback(@event_callback)
@@ -169,16 +161,7 @@ module Qt
       return if @signal_callback
 
       @signal_callback = FFI::Function.new(:void, %i[pointer int string]) do |object_handle, signal_index, payload|
-        next unless object_handle && @signal_handlers
-
-        per_widget = @signal_handlers[object_handle.address]
-        next unless per_widget
-
-        per_widget.each_value do |entry|
-          next unless entry[:index] == signal_index
-
-          entry[:blocks].each { |handler| handler.call(payload) }
-        end
+        EventRuntimeDispatch.dispatch_signal(@signal_handlers, object_handle, signal_index, payload)
       end
 
       Qt::Native.set_signal_callback(@signal_callback)
@@ -188,6 +171,37 @@ module Qt
       return nil if widget.nil?
 
       widget.respond_to?(:handle) ? widget.handle : widget
+    end
+  end
+end
+
+module Qt
+  module EventRuntimeDispatch
+    module_function
+
+    def dispatch_event(event_handlers, object_handle, event_type, payload)
+      return unless object_handle && event_handlers
+
+      per_widget = event_handlers[object_handle.address]
+      return unless per_widget
+
+      handlers = per_widget[event_type]
+      return unless handlers && !handlers.empty?
+
+      handlers.each { |handler| handler.call(payload) }
+    end
+
+    def dispatch_signal(signal_handlers, object_handle, signal_index, payload)
+      return unless object_handle && signal_handlers
+
+      per_widget = signal_handlers[object_handle.address]
+      return unless per_widget
+
+      per_widget.each_value do |entry|
+        next unless entry[:index] == signal_index
+
+        entry[:blocks].each { |handler| handler.call(payload) }
+      end
     end
   end
 end
