@@ -838,45 +838,59 @@ def generate_ruby_wrapper_class(lines, qt_class, super_ruby)
   lines << ''
 end
 
+def find_getter_decl(ast, qt_class, property)
+  collect_method_decls_with_bases(ast, qt_class, property).find do |decl|
+    next false unless decl['__effective_access'] == 'public'
+
+    parsed = parse_method_signature(decl)
+    next false unless parsed && parsed[:params].empty?
+
+    map_cpp_return_type(parsed[:return_type])
+  end
+end
+
+def build_property_getter_method(getter_decl, property)
+  parsed_getter = parse_method_signature(getter_decl)
+  ret_info = map_cpp_return_type(parsed_getter[:return_type])
+  return nil unless ret_info
+
+  getter = {
+    qt_name: property,
+    ruby_name: property,
+    ffi_return: ret_info[:ffi_return],
+    args: [],
+    property: property
+  }
+  getter[:return_cast] = ret_info[:return_cast] if ret_info[:return_cast]
+  getter
+end
+
+def enrich_spec_with_property_getter!(methods, ast, spec, method)
+  return unless method[:args].length == 1
+
+  property = property_name_from_setter(method[:qt_name])
+  return unless property
+  return unless class_has_method?(ast, spec[:qt_class], property)
+
+  existing_getter = methods.find { |m| m[:qt_name] == property && m[:args].empty? }
+  if existing_getter
+    existing_getter[:property] ||= property
+    return
+  end
+
+  getter_decl = find_getter_decl(ast, spec[:qt_class], property)
+  return unless getter_decl
+
+  getter = build_property_getter_method(getter_decl, property)
+  methods << getter if getter
+end
+
 def enrich_specs_with_properties(specs, ast)
   specs.map do |spec|
     methods = spec[:methods].dup
 
     spec[:methods].each do |method|
-      next unless method[:args].length == 1
-
-      property = property_name_from_setter(method[:qt_name])
-      next unless property
-      next unless class_has_method?(ast, spec[:qt_class], property)
-      existing_getter = methods.find { |m| m[:qt_name] == property && m[:args].empty? }
-      if existing_getter
-        existing_getter[:property] ||= property
-        next
-      end
-
-      getter_decl = collect_method_decls_with_bases(ast, spec[:qt_class], property).find do |decl|
-        next false unless decl['__effective_access'] == 'public'
-
-        parsed = parse_method_signature(decl)
-        next false unless parsed && parsed[:params].empty?
-
-        map_cpp_return_type(parsed[:return_type])
-      end
-      next unless getter_decl
-
-      parsed_getter = parse_method_signature(getter_decl)
-      ret_info = map_cpp_return_type(parsed_getter[:return_type])
-      next unless ret_info
-
-      getter = {
-        qt_name: property,
-        ruby_name: property,
-        ffi_return: ret_info[:ffi_return],
-        args: [],
-        property: property
-      }
-      getter[:return_cast] = ret_info[:return_cast] if ret_info[:return_cast]
-      methods << getter
+      enrich_spec_with_property_getter!(methods, ast, spec, method)
     end
 
     spec.merge(methods: methods)
@@ -951,42 +965,60 @@ def generate_cpp_delete(lines)
   lines << '}'
 end
 
+def cpp_method_signature(method)
+  ['void* handle'] + method[:args].map { |arg| "#{ffi_to_cpp_type(arg[:ffi])} #{arg[:name]}" }
+end
+
+def cpp_null_handle_return(method)
+  case method[:ffi_return]
+  when :void
+    '    return;'
+  when :int
+    '    return -1;'
+  when :pointer, :string
+    '    return nullptr;'
+  else
+    '    return;'
+  end
+end
+
+def emit_cpp_method_return(lines, method, invocation)
+  if method[:ffi_return] == :void
+    lines << "  #{invocation};"
+    return
+  end
+
+  if method[:ffi_return] == :string && method[:return_cast] == :qstring_to_utf8
+    lines << "  const QString value = #{invocation};"
+    lines << '  thread_local QByteArray utf8;'
+    lines << '  utf8 = value.toUtf8();'
+    lines << '  return utf8.constData();'
+    return
+  end
+
+  if method[:ffi_return] == :pointer
+    lines << "  return const_cast<void*>(static_cast<const void*>(#{invocation}));"
+    return
+  end
+
+  lines << "  return #{invocation};"
+end
+
 def generate_cpp_method(lines, spec, method)
   fn = method_function_name(spec, method)
   ret = ffi_return_to_cpp(method[:ffi_return])
-  sig = ['void* handle'] + method[:args].map { |arg| "#{ffi_to_cpp_type(arg[:ffi])} #{arg[:name]}" }
+  sig = cpp_method_signature(method)
 
   lines << "extern \"C\" #{ret} #{fn}(#{sig.join(', ')}) {"
   lines << '  if (!handle) {'
-  lines << case method[:ffi_return]
-           when :void
-             '    return;'
-           when :int
-             '    return -1;'
-           when :pointer, :string
-             '    return nullptr;'
-           else
-             '    return;'
-           end
+  lines << cpp_null_handle_return(method)
   lines << '  }'
   lines << ''
   lines << "  auto* self_obj = static_cast<#{spec[:qt_class]}*>(handle);"
 
   call_args = method[:args].map { |arg| arg_expr(arg) }.join(', ')
   invocation = "self_obj->#{method[:qt_name]}(#{call_args})"
-
-  if method[:ffi_return] == :void
-    lines << "  #{invocation};"
-  elsif method[:ffi_return] == :string && method[:return_cast] == :qstring_to_utf8
-    lines << "  const QString value = #{invocation};"
-    lines << '  thread_local QByteArray utf8;'
-    lines << '  utf8 = value.toUtf8();'
-    lines << '  return utf8.constData();'
-  elsif method[:ffi_return] == :pointer
-    lines << "  return const_cast<void*>(static_cast<const void*>(#{invocation}));"
-  else
-    lines << "  return #{invocation};"
-  end
+  emit_cpp_method_return(lines, method, invocation)
   lines << '}'
 end
 

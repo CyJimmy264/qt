@@ -40,34 +40,46 @@ module Qt
       return unless defined?(Qt::BridgeAPI::FUNCTIONS)
 
       Qt::BridgeAPI::FUNCTIONS.each do |fn|
-        native_name = fn[:name].to_s.sub(/\Aqt_ruby_/, '')
-        signature = fn[:args]
-        bridge_name = fn[:name]
-
-        define_singleton_method(native_name) do |*args|
-          ensure_loaded!
-
-          if args.length < signature.length
-            missing = signature[args.length..]
-            unless missing.all? { |type| type == :pointer }
-              raise ArgumentError, "wrong number of arguments (given #{args.length}, expected #{signature.length})"
-            end
-
-            args = args + ([nil] * (signature.length - args.length))
-          elsif args.length > signature.length
-            raise ArgumentError, "wrong number of arguments (given #{args.length}, expected #{signature.length})"
-          end
-
-          converted = args.zip(signature).map do |value, type|
-            coercer = COERCERS[type]
-            coercer ? coercer.call(value) : value
-          end
-
-          Bridge.public_send(bridge_name, *converted)
-        end
+        define_bridge_wrapper(fn)
       end
 
       @bridge_wrappers_defined = true
+    end
+
+    def define_bridge_wrapper(function_spec)
+      native_name = function_spec[:name].to_s.sub(/\Aqt_ruby_/, '')
+      signature = function_spec[:args]
+      bridge_name = function_spec[:name]
+
+      define_singleton_method(native_name) do |*args|
+        ensure_loaded!
+        normalized = normalize_bridge_args(args, signature)
+        converted = coerce_bridge_args(normalized, signature)
+        Bridge.public_send(bridge_name, *converted)
+      end
+    end
+
+    def normalize_bridge_args(args, signature)
+      if args.length < signature.length
+        missing = signature[args.length..]
+        unless missing.all? { |type| type == :pointer }
+          raise ArgumentError, "wrong number of arguments (given #{args.length}, expected #{signature.length})"
+        end
+
+        return args + ([nil] * (signature.length - args.length))
+      end
+      if args.length > signature.length
+        raise ArgumentError, "wrong number of arguments (given #{args.length}, expected #{signature.length})"
+      end
+
+      args
+    end
+
+    def coerce_bridge_args(args, signature)
+      args.zip(signature).map do |value, type|
+        coercer = COERCERS[type]
+        coercer ? coercer.call(value) : value
+      end
     end
 
     define_bridge_wrappers!
