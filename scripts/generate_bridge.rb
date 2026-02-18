@@ -451,15 +451,9 @@ def parse_method_signature(method_decl)
   }
 end
 
-def build_auto_method_from_decl(method_decl, entry, qt_class:, int_cast_types:)
-  parsed = parse_method_signature(method_decl)
-  return nil unless parsed
-
-  ret_info = map_cpp_return_type(parsed[:return_type])
-  return nil unless ret_info
-
+def build_auto_method_args(parsed, entry, qt_class, int_cast_types)
   arg_cast_overrides = Array(entry[:arg_casts])
-  args = parsed[:params].each_with_index.map do |param, idx|
+  parsed[:params].each_with_index.map do |param, idx|
     cast_override = arg_cast_overrides[idx]
     arg_info = map_cpp_arg_type(param[:type], qt_class: qt_class, int_cast_types: int_cast_types)
     arg_info ||= { ffi: :int } if cast_override
@@ -470,7 +464,9 @@ def build_auto_method_from_decl(method_decl, entry, qt_class:, int_cast_types:)
     arg_hash[:cast] = cast if cast
     arg_hash
   end
+end
 
+def build_auto_method_hash(entry, ret_info, args, parsed)
   method = {
     qt_name: entry[:qt_name],
     ruby_name: ruby_public_method_name(entry[:qt_name], entry[:ruby_name]),
@@ -480,6 +476,19 @@ def build_auto_method_from_decl(method_decl, entry, qt_class:, int_cast_types:)
   }
   method[:return_cast] = ret_info[:return_cast] if ret_info[:return_cast]
   method
+end
+
+def build_auto_method_from_decl(method_decl, entry, qt_class:, int_cast_types:)
+  parsed = parse_method_signature(method_decl)
+  return nil unless parsed
+
+  ret_info = map_cpp_return_type(parsed[:return_type])
+  return nil unless ret_info
+
+  args = build_auto_method_args(parsed, entry, qt_class, int_cast_types)
+  return nil unless args
+
+  build_auto_method_hash(entry, ret_info, args, parsed)
 end
 
 def auto_exportable_method_name?(name)
@@ -563,22 +572,39 @@ def filter_auto_method_candidates(candidates, entry)
   filtered
 end
 
-def resolve_auto_method(ast, qt_class, auto_entry)
-  @resolve_auto_method_cache ||= {}
+def resolve_auto_method_entry(auto_entry)
+  auto_entry.is_a?(String) ? { qt_name: auto_entry } : auto_entry.dup
+end
+
+def resolve_auto_method_cached(cache, cache_key)
+  return [false, nil] unless cache.key?(cache_key)
+
+  [true, cache[cache_key]]
+end
+
+def resolve_auto_method_built_candidates(ast, qt_class, entry)
+  decls = collect_method_decls_with_bases(ast, qt_class, entry.fetch(:qt_name))
+  return nil if decls.empty?
+
   int_cast_types = ast_int_cast_type_set(ast)
-  entry = auto_entry.is_a?(String) ? { qt_name: auto_entry } : auto_entry.dup
-  cache_key = resolve_auto_method_cache_key(ast, qt_class, entry)
-  return @resolve_auto_method_cache[cache_key] if @resolve_auto_method_cache.key?(cache_key)
-
-  qt_name = entry.fetch(:qt_name)
-  decls = collect_method_decls_with_bases(ast, qt_class, qt_name)
-  return @resolve_auto_method_cache[cache_key] = nil if decls.empty?
-
   built = build_auto_method_candidates(decls, entry, qt_class, int_cast_types)
-  return @resolve_auto_method_cache[cache_key] = nil if built.empty?
+  return nil if built.empty?
 
   built = filter_auto_method_candidates(built, entry)
-  return @resolve_auto_method_cache[cache_key] = nil if built.empty?
+  return nil if built.empty?
+
+  built
+end
+
+def resolve_auto_method(ast, qt_class, auto_entry)
+  @resolve_auto_method_cache ||= {}
+  entry = resolve_auto_method_entry(auto_entry)
+  cache_key = resolve_auto_method_cache_key(ast, qt_class, entry)
+  cache_hit, cached = resolve_auto_method_cached(@resolve_auto_method_cache, cache_key)
+  return cached if cache_hit
+
+  built = resolve_auto_method_built_candidates(ast, qt_class, entry)
+  return @resolve_auto_method_cache[cache_key] = nil unless built
 
   @resolve_auto_method_cache[cache_key] = built.min_by { |candidate| candidate[:method][:args].length }[:method]
 end
@@ -1216,9 +1242,7 @@ def append_widget_initializer(lines, spec:, widget_root:, indent:)
   lines << "#{indent}end"
 end
 
-def generate_ruby_qapplication(lines, spec)
-  metadata = ruby_api_metadata(spec[:methods])
-
+def append_ruby_qapplication_prelude(lines, spec, metadata)
   lines << '  class QApplication'
   append_ruby_class_api_constants(lines, qt_class: spec[:qt_class], metadata: metadata, indent: '    ')
   lines << ''
@@ -1226,6 +1250,9 @@ def generate_ruby_qapplication(lines, spec)
   lines << '    include Inspectable'
   lines << '    include ApplicationLifecycle'
   lines << ''
+end
+
+def append_ruby_qapplication_singleton_accessors(lines)
   lines << '    class << self'
   lines << '      def current'
   lines << '        Thread.current[:qt_ruby_current_app]'
@@ -1234,6 +1261,13 @@ def generate_ruby_qapplication(lines, spec)
   lines << '      def current=(app)'
   lines << '        Thread.current[:qt_ruby_current_app] = app'
   lines << '      end'
+end
+
+def generate_ruby_qapplication(lines, spec)
+  metadata = ruby_api_metadata(spec[:methods])
+
+  append_ruby_qapplication_prelude(lines, spec, metadata)
+  append_ruby_qapplication_singleton_accessors(lines)
 
   Array(spec[:class_methods]).each { |method| append_ruby_qapplication_class_method(lines, method) }
 
@@ -1243,14 +1277,23 @@ def generate_ruby_qapplication(lines, spec)
   lines << ''
 end
 
+def qapplication_method_arguments(method)
+  arg_hashes = Array(method[:args]).map { |name| { name: name } }
+  arg_map = ruby_arg_name_map(arg_hashes)
+  rendered_args = arg_hashes.map { |arg| arg_map[arg[:name]] }.join(', ')
+  [arg_hashes, arg_map, rendered_args]
+end
+
+def qapplication_method_call_suffix(arg_hashes, arg_map)
+  native_args = arg_hashes.map { |arg| arg_map[arg[:name]] }.join(', ')
+  native_args.empty? ? '' : "(#{native_args})"
+end
+
 def append_ruby_qapplication_class_method(lines, method)
   ruby_name = ruby_safe_method_name(method[:ruby_name])
   snake_alias = to_snake(ruby_name)
-  method_arg_hashes = Array(method[:args]).map { |name| { name: name } }
-  arg_map = ruby_arg_name_map(method_arg_hashes)
-  args = method_arg_hashes.map { |arg| arg_map[arg[:name]] }.join(', ')
-  native_args = method_arg_hashes.map { |arg| arg_map[arg[:name]] }.join(', ')
-  call_suffix = native_args.empty? ? '' : "(#{native_args})"
+  method_arg_hashes, arg_map, args = qapplication_method_arguments(method)
+  call_suffix = qapplication_method_call_suffix(method_arg_hashes, arg_map)
 
   lines << ''
   lines << "      def #{ruby_name}(#{args})"
