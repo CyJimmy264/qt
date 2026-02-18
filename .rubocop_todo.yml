@@ -30,12 +30,7 @@ Metrics/ModuleLength:
 # Offense count: 1
 # Configuration parameters: CountKeywordArgs, MaxOptionalParameters.
 Metrics/ParameterLists:
-  Max: 6
-
-# Offense count: 23
-Naming/ConstantName:
-  Exclude:
-    - 'lib/qt/constants.rb'
+  Max: 5
 
 # Offense count: 25
 # This cop supports safe autocorrection (--autocorrect).
@@ -43,12 +38,7 @@ Naming/ConstantName:
 # URISchemes: http, https
 Layout/LineLength:
   Exclude:
-    - 'examples/development_ordered_demos/03_component_showcase.rb'
-    - 'examples/development_ordered_demos/04_paint_simple.rb'
-    - 'examples/development_ordered_demos/05_tetris_simple.rb'
     - 'examples/development_ordered_demos/06_timetrap_clockify.rb'
-    - 'examples/qtproject/widgets/widgetsgallery/main.rb'
-    - 'scripts/generate_bridge.rb'
 
 # Offense count: 8
 # Configuration parameters: AllowedConstants.

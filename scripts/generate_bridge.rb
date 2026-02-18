@@ -247,8 +247,10 @@ def emit_cpp_default_constructor(lines, name, qt_class)
 end
 
 def emit_cpp_parent_constructor(lines, name, spec)
+  parent_type = spec[:constructor][:parent_type]
+  parent_class = parent_type.delete('*')
   lines << "extern \"C\" void* #{name}(void* parent_handle) {"
-  lines << "  #{spec[:constructor][:parent_type].delete('*')}* parent = static_cast<#{spec[:constructor][:parent_type]}>(parent_handle);"
+  lines << "  #{parent_class}* parent = static_cast<#{parent_type}>(parent_handle);"
   lines << "  return new #{spec[:qt_class]}(parent);"
   lines << '}'
 end
@@ -703,7 +705,9 @@ base_specs = timed('build_base_specs') { build_base_specs(ast) }
 timed('validate_qt_api') { validate_qt_api!(ast, base_specs) }
 expanded_specs = timed('expand_auto_methods') { expand_auto_methods(base_specs, ast) }
 effective_specs = timed('enrich_specs_with_properties') { enrich_specs_with_properties(expanded_specs, ast) }
-super_qt_by_qt, wrapper_qt_classes = timed('build_generated_inheritance') { build_generated_inheritance(ast, effective_specs) }
+super_qt_by_qt, wrapper_qt_classes = timed('build_generated_inheritance') do
+  build_generated_inheritance(ast, effective_specs)
+end
 
 timed('write_cpp_bridge') do
   FileUtils.mkdir_p(File.dirname(CPP_PATH))

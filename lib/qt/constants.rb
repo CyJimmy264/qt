@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 module Qt
+  # Keep Qt-style constant names for API compatibility with upstream Qt naming.
+  # rubocop:disable Naming/ConstantName
   AlignCenter = 0x84
   NoFocus = 0
   EventMouseButtonPress = 2
@@ -24,4 +26,5 @@ module Qt
   ScrollBarAsNeeded = 0
   ScrollBarAlwaysOff = 1
   ScrollBarAlwaysOn = 2
+  # rubocop:enable Naming/ConstantName
 end

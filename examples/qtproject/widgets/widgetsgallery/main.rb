@@ -13,7 +13,8 @@ THEMES = {
     card: 'background-color: #ffffff; border: 1px solid #d5dce8; color: #0f172a;',
     title: 'background-color: #ffffff; border: 1px solid #cbd5e1; color: #0f172a; font-size: 17px; font-weight: 800;',
     button: 'background-color: #ffffff; border: 1px solid #94a3b8; color: #0f172a; font-size: 12px; font-weight: 700;',
-    button_active: 'background-color: #dbeafe; border: 2px solid #2563eb; color: #0f172a; font-size: 12px; font-weight: 800;',
+    button_active: 'background-color: #dbeafe; border: 2px solid #2563eb; color: #0f172a; ' \
+                   'font-size: 12px; font-weight: 800;',
     input: 'background-color: #ffffff; border: 1px solid #a8b3c6; color: #0f172a; font-size: 12px;'
   },
   dark: {
@@ -21,7 +22,8 @@ THEMES = {
     card: 'background-color: #101a2d; border: 1px solid #334155; color: #e2e8f0;',
     title: 'background-color: #0f172a; border: 1px solid #334155; color: #f8fafc; font-size: 17px; font-weight: 800;',
     button: 'background-color: #111827; border: 1px solid #475569; color: #e2e8f0; font-size: 12px; font-weight: 700;',
-    button_active: 'background-color: #1d4ed8; border: 2px solid #60a5fa; color: #f8fafc; font-size: 12px; font-weight: 800;',
+    button_active: 'background-color: #1d4ed8; border: 2px solid #60a5fa; color: #f8fafc; ' \
+                   'font-size: 12px; font-weight: 800;',
     input: 'background-color: #0b1220; border: 1px solid #475569; color: #e2e8f0; font-size: 12px;'
   }
 }.freeze

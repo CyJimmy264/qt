@@ -149,7 +149,8 @@ module Qt
 
       @event_callback = FFI::Function.new(
         :void, %i[pointer int int int int int]
-      ) do |object_handle, event_type, a, b, c, d|
+      ) do |object_handle, event_type, *args|
+        a, b, c, d = args
         payload = { type: event_type, a: a, b: b, c: c, d: d }
         EventRuntimeDispatch.dispatch_event(@event_handlers, object_handle, event_type, payload)
       end

@@ -17,7 +17,8 @@ RIGHT_BUTTON = 2
 
 ERASE_STYLE = 'background-color: #ffffff; border: 1px solid #f1f1f1;'
 TOOLBAR_STYLE = 'background-color: #f7f7f7; border: 1px solid #d8d8d8;'
-STATUS_STYLE = 'background-color: #ffffff; border: 1px solid #c7c7c7; color: #111111; font-weight: 700; font-size: 12px;'
+STATUS_STYLE = 'background-color: #ffffff; border: 1px solid #c7c7c7; color: #111111; ' \
+               'font-weight: 700; font-size: 12px;'
 CLEAR_STYLE = 'background-color: #ffffff; border: 1px solid #c7c7c7; color: #111111; font-weight: 800; font-size: 12px;'
 PALETTE = [
   { name: 'Black', style: 'background-color: #111111; border: 1px solid #111111;' },

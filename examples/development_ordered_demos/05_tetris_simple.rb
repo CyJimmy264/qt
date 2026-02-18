@@ -18,7 +18,8 @@ BUTTON_ACTIVE_STYLE = 'background-color: #dbeafe; border: 1px solid #60a5fa;'
 TITLE_STYLE = 'background-color: #ffffff; border: 1px solid #cccccc; color: #111111; font-weight: 800; font-size: 15px;'
 INFO_STYLE = 'background-color: #ffffff; border: 1px solid #cccccc; color: #111111; font-weight: 700; font-size: 12px;'
 BTN_STYLE = 'background-color: #ffffff; border: 1px solid #bdbdbd; color: #111111; font-weight: 700; font-size: 12px;'
-BTN_ACTIVE_STYLE = 'background-color: #dbeafe; border: 2px solid #2563eb; color: #111111; font-weight: 800; font-size: 12px;'
+BTN_ACTIVE_STYLE = 'background-color: #dbeafe; border: 2px solid #2563eb; color: #111111; ' \
+                   'font-weight: 800; font-size: 12px;'
 
 PIECE_STYLES = [
   'background-color: #16a34a; border: 1px solid #15803d;',

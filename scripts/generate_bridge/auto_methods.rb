@@ -370,7 +370,8 @@ def expand_auto_methods_for_spec(spec, ast, totals)
     ast, spec, auto_entries, manual_methods, auto_mode
   )
   update_auto_method_totals!(totals, spec_candidates, spec_resolved, spec_skipped)
-  log_auto_method_expansion(spec, auto_mode, spec_candidates, spec_resolved, spec_skipped, spec_start)
+  counts = { candidates: spec_candidates, resolved: spec_resolved, skipped: spec_skipped }
+  log_auto_method_expansion(spec: spec, auto_mode: auto_mode, counts: counts, spec_start: spec_start)
 
   spec.merge(methods: manual_methods + auto_methods)
 end
@@ -381,11 +382,11 @@ def update_auto_method_totals!(totals, spec_candidates, spec_resolved, spec_skip
   totals[:skipped] += spec_skipped
 end
 
-def log_auto_method_expansion(spec, auto_mode, spec_candidates, spec_resolved, spec_skipped, spec_start)
+def log_auto_method_expansion(spec:, auto_mode:, counts:, spec_start:)
   elapsed = monotonic_now - spec_start
   message = "auto #{spec[:qt_class]} mode=#{auto_mode || :list} " \
-            "candidates=#{spec_candidates} resolved=#{spec_resolved} " \
-            "skipped=#{spec_skipped} #{format('%.3fs', elapsed)}"
+            "candidates=#{counts[:candidates]} resolved=#{counts[:resolved]} " \
+            "skipped=#{counts[:skipped]} #{format('%.3fs', elapsed)}"
   debug_log(
     message
   )

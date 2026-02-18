@@ -14,8 +14,10 @@ TITLE_LIGHT = 'background-color: #ffffff; border: 1px solid #d4d4d8; color: #111
 TITLE_DARK = 'background-color: #111827; border: 1px solid #374151; color: #f9fafb; font-size: 16px; font-weight: 800;'
 BTN_LIGHT = 'background-color: #ffffff; border: 1px solid #a1a1aa; color: #111827; font-size: 12px; font-weight: 700;'
 BTN_DARK = 'background-color: #111827; border: 1px solid #6b7280; color: #f9fafb; font-size: 12px; font-weight: 700;'
-BTN_ACTIVE_LIGHT = 'background-color: #dbeafe; border: 2px solid #3b82f6; color: #111827; font-size: 12px; font-weight: 800;'
-BTN_ACTIVE_DARK = 'background-color: #1e3a8a; border: 2px solid #60a5fa; color: #f9fafb; font-size: 12px; font-weight: 800;'
+BTN_ACTIVE_LIGHT = 'background-color: #dbeafe; border: 2px solid #3b82f6; color: #111827; ' \
+                   'font-size: 12px; font-weight: 800;'
+BTN_ACTIVE_DARK = 'background-color: #1e3a8a; border: 2px solid #60a5fa; color: #f9fafb; ' \
+                  'font-size: 12px; font-weight: 800;'
 
 app = QApplication.new(0, [])
 window = QWidget.new do |w|

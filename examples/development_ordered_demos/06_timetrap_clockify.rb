@@ -75,10 +75,14 @@ AREA_STYLE = <<~QSS.tr("\n", ' ')
     background: transparent;
   }
 QSS
-WEEK_STYLE = 'background-color: #dce3ea; border: 1px solid #c8d1db; color: #111827; font-size: 16px; font-weight: 800; padding-left: 12px;'
-DAY_STYLE = 'background-color: #ecf1f6; border: 1px solid #d5dee8; color: #5b6776; font-size: 13px; font-weight: 700; padding-left: 12px;'
-PROJECT_ROW = 'background-color: #ffffff; border: 1px solid #d8e0ea; color: #0f172a; font-size: 14px; font-weight: 700; padding-left: 12px; text-align: left;'
-DETAIL_ROW = 'background-color: #f9fbfd; border: 1px solid #e3e8ef; color: #334155; font-size: 12px; padding-left: 24px;'
+WEEK_STYLE = 'background-color: #dce3ea; border: 1px solid #c8d1db; color: #111827; ' \
+             'font-size: 16px; font-weight: 800; padding-left: 12px;'
+DAY_STYLE = 'background-color: #ecf1f6; border: 1px solid #d5dee8; color: #5b6776; ' \
+            'font-size: 13px; font-weight: 700; padding-left: 12px;'
+PROJECT_ROW = 'background-color: #ffffff; border: 1px solid #d8e0ea; color: #0f172a; ' \
+              'font-size: 14px; font-weight: 700; padding-left: 12px; text-align: left;'
+DETAIL_ROW = 'background-color: #f9fbfd; border: 1px solid #e3e8ef; color: #334155; ' \
+             'font-size: 12px; padding-left: 24px;'
 
 app = QApplication.new(0, [])
 window = QWidget.new do |w|
@@ -443,8 +447,10 @@ render_blocks = lambda do
       day_count += 1
       day_entries = by_day[day]
       day_sec = day_entries.sum { |e| entry_seconds.call(e) }
-      add_row_label.call(14, y, CONTENT_W - 54, 38, DAY_STYLE,
-                         "#{day.strftime('%a, %b %-d')}                                      Total: #{seconds_to_hms.call(day_sec)}")
+      add_row_label.call(
+        14, y, CONTENT_W - 54, 38, DAY_STYLE,
+        "#{day.strftime('%a, %b %-d')}                                      Total: #{seconds_to_hms.call(day_sec)}"
+      )
       y += 42
 
       by_project = {}
@@ -462,7 +468,6 @@ render_blocks = lambda do
         project_keys_this_render << exp_key
         expanded = expanded_rows[exp_key]
         marker = expanded ? '▼' : '▶'
-
         click_key = exp_key
         row = QLabel.new(scroll_host)
         row.set_geometry(18, y, CONTENT_W - 62, 40)
@@ -505,7 +510,6 @@ render_blocks = lambda do
   project_pill.set_text("Project: #{selected_project[0, 20]}")
   last_week_keys = week_keys_this_render
   last_project_keys = project_keys_this_render
-
   content_h = [y + 30, 900].max
   host_w = CONTENT_W - 20
   scroll_host.set_geometry(0, 0, host_w, content_h)
@@ -526,8 +530,7 @@ render_blocks = lambda do
         end
       "#{w.class}@#{ptr.call(w)}:#{t[0, 48].inspect}"
     end
-    dbg.call("render sample #{sample.join(' | ')}")
-    dbg.call("render visible window=#{window.is_visible} host=#{scroll_host.is_visible}")
+    dbg.call("render sample #{sample.join(' | ')} | visible window=#{window.is_visible} host=#{scroll_host.is_visible}")
   end
 end
 
