@@ -104,6 +104,11 @@ class TimetrapRenderData
     end
   end
 
+  def filtered_week_groups(entries, selected_project)
+    filtered = filtered_entries(entries, selected_project)
+    [filtered, group_by_week(filtered.last(260).reverse)]
+  end
+
   def group_by_day(entries)
     entries.each_with_object({}) do |entry, by_day|
       day = (entry[:start_time] || Time.now).to_date
@@ -444,123 +449,136 @@ render_geometry_log_text = lambda do |host_w, content_h|
     "host=#{geo.call(0, 0, host_w, content_h)}"
 end
 
+render_empty_state = lambda do |y, selected|
+  add_row_label.call(18, y + 8, CONTENT_W - 62, 44, DAY_STYLE, "No entries for filter: #{selected}")
+  dbg.call("render empty for selected=#{selected.inspect}")
+  y + 56
+end
+
 reset_render_widgets = lambda do
   render_widgets.each(&:hide)
   render_widgets.clear
 end
 
-render_blocks = lambda do
-  reset_render_widgets.call
+render_entry_details = lambda do |group, y|
+  group[:entries].sort_by { |e| e[:start_time] || Time.now }.reverse.each do |entry|
+    note = entry[:note].to_s.strip
+    note = '(no note)' if note.empty?
+    detail = "#{fmt_range.call(entry)}   #{seconds_to_hms.call(entry_seconds.call(entry))}   #{note[0, 80]}"
+    add_row_label.call(26, y, CONTENT_W - 78, 34, DETAIL_ROW, detail)
+    y += 36
+  end
+  y
+end
 
-  filtered = render_data.filtered_entries(entries_cache, selected_project)
-  dbg.call(render_begin_log_text.call(selected_project, entries_cache.length, filtered.length))
+render_project_group_row = lambda do |day, group, y, project_keys_this_render|
+  p_total = group[:entries].sum { |e| entry_seconds.call(e) }
+  exp_key = "#{day}|#{group[:project]}|#{group[:task]}"
+  project_keys_this_render << exp_key
+  expanded = expanded_rows[exp_key]
+  marker = expanded ? '▼' : '▶'
+  click_key = exp_key
+  row = QLabel.new(scroll_host)
+  row.set_geometry(18, y, CONTENT_W - 62, 40)
+  row.set_style_sheet(PROJECT_ROW)
+  row.set_text(project_row_text.call(marker, group, p_total))
+  row.show
+  render_widgets << row
+  row.on(:mouse_button_release) do |_ev|
+    dbg.call("click project-row #{click_key}")
+    expanded_rows[click_key] = !expanded_rows[click_key]
+    dbg.call("click project-row toggled #{click_key}=#{expanded_rows[click_key]}")
+    pending_render = true
+  end
+  y += 42
+  [y, expanded]
+end
 
-  recent = filtered.last(260).reverse
-  by_week = render_data.group_by_week(recent)
+render_day_section = lambda do |day, day_entries, y, project_keys_this_render|
+  day_sec = day_entries.sum { |e| entry_seconds.call(e) }
+  add_row_label.call(
+    14, y, CONTENT_W - 54, 38, DAY_STYLE,
+    "#{day.strftime('%a, %b %-d')}                                      Total: #{seconds_to_hms.call(day_sec)}"
+  )
+  y += 42
+  groups_count = 0
+  render_data.project_groups(day_entries).each do |group|
+    groups_count += 1
+    y, expanded = render_project_group_row.call(day, group, y, project_keys_this_render)
+    y = render_entry_details.call(group, y) if expanded
+  end
+  [y + 10, groups_count]
+end
 
-  y = 10
-  total_sec = 0
-  week_count = 0
-  day_count = 0
-  project_group_count = 0
-  week_keys_this_render = []
-  project_keys_this_render = []
+render_week_day_sections = lambda do |week_entries, y, project_keys_this_render|
+  day_count_add = 0
+  project_group_count_add = 0
+  by_day = render_data.group_by_day(week_entries)
+  by_day.keys.sort.reverse.each do |day|
+    day_count_add += 1
+    y, groups_count = render_day_section.call(day, by_day[day], y, project_keys_this_render)
+    project_group_count_add += groups_count
+  end
+  [y + 8, day_count_add, project_group_count_add]
+end
 
+render_week_header = lambda do |wk, week_entries, y, week_keys_this_render|
+  week_sec = week_entries.sum { |e| entry_seconds.call(e) }
+  week_key = wk.iso8601
+  week_keys_this_render << week_key
+  week_expanded = expanded_weeks.fetch(week_key, true)
+  week_marker = week_expanded ? '▼' : '▶'
+  week_label = QLabel.new(scroll_host)
+  week_label.set_geometry(10, y, CONTENT_W - 162, 44)
+  week_label.set_style_sheet(WEEK_STYLE)
+  week_label.set_text(week_title_text.call(week_marker, wk, week_sec))
+  week_label.show
+  render_widgets << week_label
+  toggle = QLabel.new(scroll_host)
+  toggle.set_geometry(CONTENT_W - 144, y + 4, 132, 36)
+  toggle.set_style_sheet(PROJECT_ROW)
+  toggle.set_alignment(Qt::AlignCenter)
+  toggle.set_text(week_expanded ? 'COLLAPSE WEEK' : 'EXPAND WEEK')
+  toggle.show
+  render_widgets << toggle
+  week_click_key = week_key
+  toggle.on(:mouse_button_release) do |_ev|
+    expanded_weeks[week_click_key] = !expanded_weeks.fetch(week_click_key, true)
+    dbg.call("click week-toggle #{week_click_key} expanded=#{expanded_weeks[week_click_key]}")
+    pending_render = true
+  end
+  [y + 52, week_sec, week_expanded]
+end
+
+build_render_state = lambda do
+  {
+    y: 10, total_sec: 0, week_count: 0, day_count: 0, project_group_count: 0,
+    week_keys: [], project_keys: []
+  }
+end
+
+render_weeks = lambda do |by_week, state|
   by_week.keys.sort.reverse.each do |wk|
-    week_count += 1
+    state[:week_count] += 1
     week_entries = by_week[wk]
-    week_sec = week_entries.sum { |e| entry_seconds.call(e) }
-    total_sec += week_sec
-    week_key = wk.iso8601
-    week_keys_this_render << week_key
-    week_expanded = expanded_weeks.fetch(week_key, true)
-    week_marker = week_expanded ? '▼' : '▶'
-    week_label = QLabel.new(scroll_host)
-    week_label.set_geometry(10, y, CONTENT_W - 162, 44)
-    week_label.set_style_sheet(WEEK_STYLE)
-    week_label.set_text(week_title_text.call(week_marker, wk, week_sec))
-    week_label.show
-    render_widgets << week_label
-
-    toggle = QLabel.new(scroll_host)
-    toggle.set_geometry(CONTENT_W - 144, y + 4, 132, 36)
-    toggle.set_style_sheet(PROJECT_ROW)
-    toggle.set_alignment(Qt::AlignCenter)
-    toggle.set_text(week_expanded ? 'COLLAPSE WEEK' : 'EXPAND WEEK')
-    toggle.show
-    render_widgets << toggle
-
-    week_click_key = week_key
-    toggle.on(:mouse_button_release) do |_ev|
-      expanded_weeks[week_click_key] = !expanded_weeks.fetch(week_click_key, true)
-      dbg.call("click week-toggle #{week_click_key} expanded=#{expanded_weeks[week_click_key]}")
-      pending_render = true
-    end
-    y += 52
+    state[:y], week_sec, week_expanded = render_week_header.call(wk, week_entries, state[:y], state[:week_keys])
+    state[:total_sec] += week_sec
     next unless week_expanded
 
-    by_day = render_data.group_by_day(week_entries)
-
-    by_day.keys.sort.reverse.each do |day|
-      day_count += 1
-      day_entries = by_day[day]
-      day_sec = day_entries.sum { |e| entry_seconds.call(e) }
-      add_row_label.call(
-        14, y, CONTENT_W - 54, 38, DAY_STYLE,
-        "#{day.strftime('%a, %b %-d')}                                      Total: #{seconds_to_hms.call(day_sec)}"
-      )
-      y += 42
-
-      render_data.project_groups(day_entries).each do |group|
-        project_group_count += 1
-        p_total = group[:entries].sum { |e| entry_seconds.call(e) }
-        exp_key = "#{day}|#{group[:project]}|#{group[:task]}"
-        project_keys_this_render << exp_key
-        expanded = expanded_rows[exp_key]
-        marker = expanded ? '▼' : '▶'
-        click_key = exp_key
-        row = QLabel.new(scroll_host)
-        row.set_geometry(18, y, CONTENT_W - 62, 40)
-        row.set_style_sheet(PROJECT_ROW)
-        row.set_text(project_row_text.call(marker, group, p_total))
-        row.show
-        render_widgets << row
-        row.on(:mouse_button_release) do |_ev|
-          dbg.call("click project-row #{click_key}")
-          expanded_rows[click_key] = !expanded_rows[click_key]
-          dbg.call("click project-row toggled #{click_key}=#{expanded_rows[click_key]}")
-          pending_render = true
-        end
-        y += 42
-
-        next unless expanded
-
-        group[:entries].sort_by { |e| e[:start_time] || Time.now }.reverse.each do |entry|
-          note = entry[:note].to_s.strip
-          note = '(no note)' if note.empty?
-          detail = "#{fmt_range.call(entry)}   #{seconds_to_hms.call(entry_seconds.call(entry))}   #{note[0, 80]}"
-          add_row_label.call(26, y, CONTENT_W - 78, 34, DETAIL_ROW, detail)
-          y += 36
-        end
-      end
-
-      y += 10
-    end
-
-    y += 8
+    state[:y], day_count_add, project_group_count_add = render_week_day_sections.call(
+      week_entries, state[:y], state[:project_keys]
+    )
+    state[:day_count] += day_count_add
+    state[:project_group_count] += project_group_count_add
   end
+end
 
-  if filtered.empty?
-    add_row_label.call(18, y + 8, CONTENT_W - 62, 44, DAY_STYLE, "No entries for filter: #{selected_project}")
-    y += 56
-    dbg.call("render empty for selected=#{selected_project.inspect}")
-  end
-
-  summary.set_text(summary_text.call(selected_project, filtered.length, total_sec))
+finalize_render = lambda do |state, filtered_count|
+  summary.set_text(summary_text.call(selected_project, filtered_count, state[:total_sec]))
   project_pill.set_text("Project: #{selected_project[0, 20]}")
-  last_week_keys = week_keys_this_render
-  last_project_keys = project_keys_this_render
-  content_h = [y + 30, 900].max
+  last_week_keys = state[:week_keys]
+  last_project_keys = state[:project_keys]
+  content_h = [state[:y] + 30, 900].max
   host_w = CONTENT_W - 20
   scroll_host.set_geometry(0, 0, host_w, content_h)
   btn_count = render_widgets.count { |w| w.is_a?(QPushButton) }
@@ -568,24 +586,38 @@ render_blocks = lambda do
   lbl_count = render_widgets.count { |w| w.is_a?(QLabel) }
   dbg.call(
     render_done_log_text.call(
-      week_count, day_count, project_group_count, content_h, render_widgets.length, lbl_count, btn_count, row_count
+      state[:week_count], state[:day_count], state[:project_group_count], content_h,
+      render_widgets.length, lbl_count, btn_count, row_count
     )
   )
   dbg.call(render_geometry_log_text.call(host_w, content_h))
-  if DEBUG_UI
-    sample = render_widgets.first(3).map do |w|
-      t =
-        if w.respond_to?(:text)
+end
+
+debug_render_sample = lambda do
+  return unless DEBUG_UI
+
+  sample = render_widgets.first(3).map do |w|
+    t = if w.respond_to?(:text)
           w.text.to_s
         elsif w.respond_to?(:window_title)
           w.window_title.to_s
         else
           ''
         end
-      "#{w.class}@#{ptr.call(w)}:#{t[0, 48].inspect}"
-    end
-    dbg.call("render sample #{sample.join(' | ')} | visible window=#{window.is_visible} host=#{scroll_host.is_visible}")
+    "#{w.class}@#{ptr.call(w)}:#{t[0, 48].inspect}"
   end
+  dbg.call("render sample #{sample.join(' | ')} | visible window=#{window.is_visible} host=#{scroll_host.is_visible}")
+end
+
+render_blocks = lambda do
+  reset_render_widgets.call
+  filtered, by_week = render_data.filtered_week_groups(entries_cache, selected_project)
+  dbg.call(render_begin_log_text.call(selected_project, entries_cache.length, filtered.length))
+  state = build_render_state.call
+  render_weeks.call(by_week, state)
+  state[:y] = render_empty_state.call(state[:y], selected_project) if filtered.empty?
+  finalize_render.call(state, filtered.length)
+  debug_render_sample.call
 end
 
 refresh_data = lambda do
@@ -625,40 +657,39 @@ flash = lambda do |label|
   end
 end
 
+start_tracking = lambda do
+  note = task_input.text.to_s.strip
+  note = 'gui-clockify' if note.empty?
+  if TIMETRAP_API
+    Timetrap::Timer.start(note)
+  else
+    run_t.call('in', note)
+  end
+end
+
+stop_tracking = lambda do
+  if TIMETRAP_API
+    active = Timetrap::Timer.active_entry
+    Timetrap::Timer.stop(active) if active
+  else
+    run_t.call('out')
+  end
+end
+
 handle_action = lambda do |key|
   case key
   when :start
-    note = task_input.text.to_s.strip
-    note = 'gui-clockify' if note.empty?
-
-    if TIMETRAP_API
-      begin
-        Timetrap::Timer.start(note)
-      rescue StandardError
-        # ignore and refresh
-      end
-    else
-      run_t.call('in', note)
-    end
-
+    start_tracking.call
     pending_refresh = true
   when :stop
-    if TIMETRAP_API
-      begin
-        active = Timetrap::Timer.active_entry
-        Timetrap::Timer.stop(active) if active
-      rescue StandardError
-        # ignore and refresh
-      end
-    else
-      run_t.call('out')
-    end
-
+    stop_tracking.call
     current_started_at = nil
     pending_refresh = true
   when :refresh
     pending_refresh = true
   end
+rescue StandardError
+  pending_refresh = true
 end
 
 start_btn.connect('clicked') do |_checked|

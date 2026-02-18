@@ -152,6 +152,41 @@ refresh_status = lambda do
   status.set_text("Ready\nitems: #{items.length}")
 end
 
+apply_label_theme = lambda do
+  items.each do |item|
+    next unless item.is_a?(QLabel)
+
+    item.set_style_sheet(dark ? CARD_DARK : CARD_LIGHT)
+  end
+end
+
+inspect_last_item = lambda do
+  last = items.last
+  if last
+    data = last.q_inspect
+    puts "[inspect] #{data}"
+    status.set_text("Inspect OK\n#{data[:ruby_class]}")
+  else
+    status.set_text('Inspect: no items')
+  end
+end
+
+remove_last_item = lambda do
+  last = items.pop
+  return unless last
+
+  layout.remove_widget(last)
+  last.hide
+end
+
+clear_items = lambda do
+  until items.empty?
+    item = items.pop
+    layout.remove_widget(item)
+    item.hide
+  end
+end
+
 perform_action = lambda do |key|
   case key
   when :add_label
@@ -163,32 +198,13 @@ perform_action = lambda do |key|
   when :theme
     dark = !dark
     apply_theme.call
-    items.each do |item|
-      next unless item.is_a?(QLabel)
-
-      item.set_style_sheet(dark ? CARD_DARK : CARD_LIGHT)
-    end
+    apply_label_theme.call
   when :inspect
-    last = items.last
-    if last
-      data = last.q_inspect
-      puts "[inspect] #{data}"
-      status.set_text("Inspect OK\n#{data[:ruby_class]}")
-    else
-      status.set_text('Inspect: no items')
-    end
+    inspect_last_item.call
   when :remove
-    last = items.pop
-    if last
-      layout.remove_widget(last)
-      last.hide
-    end
+    remove_last_item.call
   when :clear
-    until items.empty?
-      item = items.pop
-      layout.remove_widget(item)
-      item.hide
-    end
+    clear_items.call
   end
 
   refresh_status.call unless key == :inspect
