@@ -58,11 +58,6 @@ Lint/UselessAssignment:
     - 'examples/development_ordered_demos/06_timetrap_clockify.rb'
     - 'scripts/generate_bridge.rb'
 
-# Offense count: 28
-# Configuration parameters: AllowedMethods, AllowedPatterns, CountRepeatedAttributes.
-Metrics/AbcSize:
-  Max: 18
-
 # Offense count: 12
 # Configuration parameters: CountComments, CountAsOne, AllowedMethods, AllowedPatterns.
 # AllowedMethods: refine

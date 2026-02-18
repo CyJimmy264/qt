@@ -560,13 +560,21 @@ def deprecated_method_decl?(decl)
   Array(decl['inner']).any? { |node| node['kind'] == 'DeprecatedAttr' }
 end
 
-def collect_method_names_with_bases(ast, class_name, visited = {})
+def method_names_cache_entry(ast, class_name)
   @method_names_with_bases_cache ||= {}
   cache_key = [ast.object_id, class_name]
-  cached = @method_names_with_bases_cache[cache_key]
-  return cached if cached
+  [@method_names_with_bases_cache, cache_key]
+end
 
-  return [] if class_name.nil? || class_name.empty? || visited[class_name]
+def invalid_method_name_scope?(class_name, visited)
+  class_name.nil? || class_name.empty? || visited[class_name]
+end
+
+def collect_method_names_with_bases(ast, class_name, visited = {})
+  cache, cache_key = method_names_cache_entry(ast, class_name)
+  cached = cache[cache_key]
+  return cached if cached
+  return [] if invalid_method_name_scope?(class_name, visited)
 
   visited[class_name] = true
   index = ast_class_index(ast)
@@ -574,7 +582,7 @@ def collect_method_names_with_bases(ast, class_name, visited = {})
   base_names = collect_base_method_names_with_bases(ast, class_name, visited)
 
   combined = (own_names + base_names).uniq
-  @method_names_with_bases_cache[cache_key] = combined
+  cache[cache_key] = combined
   combined
 end
 
@@ -1499,19 +1507,23 @@ def emit_qt_classes(lines, qts_to_emit, specs_by_qt, super_qt_by_qt, qt_to_ruby)
   qts_to_emit.sort.each { |qt_class| emit_qt.call(qt_class) }
 end
 
-def generate_ruby_widgets(specs, super_qt_by_qt, wrapper_qt_classes)
-  lines = []
-  lines << '# frozen_string_literal: true'
-  lines << ''
-  lines << 'module Qt'
+def ruby_widgets_prelude_lines
+  ['# frozen_string_literal: true', '', 'module Qt']
+end
 
+def append_ruby_widgets_classes(lines, specs, super_qt_by_qt, wrapper_qt_classes)
   qapplication_spec = specs.find { |spec| spec[:ruby_class] == 'QApplication' }
   generate_ruby_qapplication(lines, qapplication_spec)
 
-  specs_by_qt = specs.each_with_object({}) { |s, map| map[s[:qt_class]] = s }
+  specs_by_qt = specs.each_with_object({}) { |spec, map| map[spec[:qt_class]] = spec }
   qt_to_ruby = build_qt_to_ruby_map(specs, wrapper_qt_classes)
   emitted_qts = qts_to_emit(specs, wrapper_qt_classes)
   emit_qt_classes(lines, emitted_qts, specs_by_qt, super_qt_by_qt, qt_to_ruby)
+end
+
+def generate_ruby_widgets(specs, super_qt_by_qt, wrapper_qt_classes)
+  lines = ruby_widgets_prelude_lines
+  append_ruby_widgets_classes(lines, specs, super_qt_by_qt, wrapper_qt_classes)
 
   lines << 'end'
   lines.join("\n") + "\n"
