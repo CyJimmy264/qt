@@ -61,18 +61,22 @@ module Qt
 
     def normalize_bridge_args(args, signature)
       if args.length < signature.length
-        missing = signature[args.length..]
-        unless missing.all? { |type| type == :pointer }
-          raise ArgumentError, "wrong number of arguments (given #{args.length}, expected #{signature.length})"
-        end
+        ensure_missing_args_optional!(args, signature)
 
         return args + ([nil] * (signature.length - args.length))
       end
-      if args.length > signature.length
-        raise ArgumentError, "wrong number of arguments (given #{args.length}, expected #{signature.length})"
-      end
+      raise_wrong_arity(args.length, signature.length) if args.length > signature.length
 
       args
+    end
+
+    def ensure_missing_args_optional!(args, signature)
+      missing = signature[args.length..]
+      raise_wrong_arity(args.length, signature.length) unless missing.all? { |type| type == :pointer }
+    end
+
+    def raise_wrong_arity(given, expected)
+      raise ArgumentError, "wrong number of arguments (given #{given}, expected #{expected})"
     end
 
     def coerce_bridge_args(args, signature)

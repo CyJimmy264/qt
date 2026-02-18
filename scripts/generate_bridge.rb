@@ -170,20 +170,30 @@ def all_ffi_functions(specs)
   fns = free_functions.dup
 
   specs.each do |spec|
-    ctor_args = spec[:constructor][:parent] ? [:pointer] : []
-    fns << { name: ctor_function_name(spec), ffi_return: :pointer, args: ctor_args }
-
-    if spec[:prefix] == 'qapplication'
-      fns << { name: 'qt_ruby_qapplication_delete', ffi_return: :void, args: [:pointer] }
-    end
-
-    spec[:methods].each do |method|
-      args = [:pointer] + method[:args].map { |arg| arg[:ffi] }
-      fns << { name: method_function_name(spec, method), ffi_return: method[:ffi_return], args: args }
-    end
+    append_constructor_ffi_function(fns, spec)
+    append_qapplication_delete_ffi_function(fns, spec)
+    append_method_ffi_functions(fns, spec)
   end
 
   fns
+end
+
+def append_constructor_ffi_function(fns, spec)
+  ctor_args = spec[:constructor][:parent] ? [:pointer] : []
+  fns << { name: ctor_function_name(spec), ffi_return: :pointer, args: ctor_args }
+end
+
+def append_qapplication_delete_ffi_function(fns, spec)
+  return unless spec[:prefix] == 'qapplication'
+
+  fns << { name: 'qt_ruby_qapplication_delete', ffi_return: :void, args: [:pointer] }
+end
+
+def append_method_ffi_functions(fns, spec)
+  spec[:methods].each do |method|
+    args = [:pointer] + method[:args].map { |arg| arg[:ffi] }
+    fns << { name: method_function_name(spec, method), ffi_return: method[:ffi_return], args: args }
+  end
 end
 
 def pkg_config_cflags
@@ -435,15 +445,22 @@ end
 
 def map_cpp_return_type(type_name)
   raw = type_name.to_s.strip
-  return nil if raw.include?('<') || raw.include?('>') || raw.include?('[') || raw.include?('(')
+  return nil if unsupported_cpp_type?(raw)
   return nil if raw.start_with?('const ') && raw.end_with?('*')
 
   type = raw.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
+  map_scalar_cpp_return_type(type) || map_pointer_cpp_return_type(type)
+end
 
+def map_scalar_cpp_return_type(type)
   return { ffi_return: :void } if type == 'void'
-  return { ffi_return: :int } if type == 'int'
-  return { ffi_return: :int } if type == 'bool'
+  return { ffi_return: :int } if %w[int bool].include?(type)
   return { ffi_return: :string, return_cast: :qstring_to_utf8 } if type == 'QString'
+
+  nil
+end
+
+def map_pointer_cpp_return_type(type)
   return { ffi_return: :pointer } if type.end_with?('*')
 
   nil
@@ -537,13 +554,17 @@ def collect_method_names_with_bases(ast, class_name, visited = {})
   visited[class_name] = true
   index = ast_class_index(ast)
   own_names = index[:methods_by_class].fetch(class_name, {}).keys
-  base_names = collect_class_bases(ast, class_name).flat_map do |base|
-    collect_method_names_with_bases(ast, base, visited)
-  end
+  base_names = collect_base_method_names_with_bases(ast, class_name, visited)
 
   combined = (own_names + base_names).uniq
   @method_names_with_bases_cache[cache_key] = combined
   combined
+end
+
+def collect_base_method_names_with_bases(ast, class_name, visited)
+  collect_class_bases(ast, class_name).flat_map do |base|
+    collect_method_names_with_bases(ast, base, visited)
+  end
 end
 
 def resolve_auto_method_cache_key(ast, qt_class, entry)
@@ -928,11 +949,8 @@ def build_property_getter_method(getter_decl, property)
 end
 
 def enrich_spec_with_property_getter!(methods, ast, spec, method)
-  return unless method[:args].length == 1
-
   property = property_name_from_setter(method[:qt_name])
-  return unless property
-  return unless class_has_method?(ast, spec[:qt_class], property)
+  return unless property_candidate?(method, ast, spec, property)
 
   existing_getter = methods.find { |m| m[:qt_name] == property && m[:args].empty? }
   if existing_getter
@@ -945,6 +963,14 @@ def enrich_spec_with_property_getter!(methods, ast, spec, method)
 
   getter = build_property_getter_method(getter_decl, property)
   methods << getter if getter
+end
+
+def property_candidate?(method, ast, spec, property)
+  return false unless method[:args].length == 1
+  return false unless property
+  return false unless class_has_method?(ast, spec[:qt_class], property)
+
+  true
 end
 
 def enrich_specs_with_properties(specs, ast)

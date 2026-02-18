@@ -176,11 +176,7 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
       QApplication.process_events
 
       button.click
-      20.times do
-        QApplication.process_events
-        break unless calls.empty?
-        sleep(0.005)
-      end
+      wait_for_non_empty_payloads(calls)
 
       skip 'clicked(bool) signal was not delivered in this Qt platform environment' if calls.empty?
 
