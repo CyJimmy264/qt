@@ -2,37 +2,6 @@
 
 module Qt
   module EventRuntime
-    module WidgetMethods
-      def on(event_name, &block)
-        raise ArgumentError, 'pass block to on' unless block
-
-        EventRuntime.on_event(self, event_name, &block)
-        self
-      end
-      alias on_event on
-
-      def connect(signal_name, &block)
-        raise ArgumentError, 'pass block to connect' unless block
-
-        EventRuntime.on_signal(self, signal_name, &block)
-        self
-      end
-      alias on_signal connect
-      alias slot connect
-
-      def off(event_name = nil)
-        EventRuntime.off_event(self, event_name)
-        self
-      end
-      alias off_event off
-
-      def disconnect(signal_name = nil)
-        EventRuntime.off_signal(self, signal_name)
-        self
-      end
-      alias off_signal disconnect
-    end
-
     module_function
 
     def on_event(widget, event_name, &block)
@@ -172,37 +141,6 @@ module Qt
       return nil if widget.nil?
 
       widget.respond_to?(:handle) ? widget.handle : widget
-    end
-  end
-end
-
-module Qt
-  module EventRuntimeDispatch
-    module_function
-
-    def dispatch_event(event_handlers, object_handle, event_type, payload)
-      return unless object_handle && event_handlers
-
-      per_widget = event_handlers[object_handle.address]
-      return unless per_widget
-
-      handlers = per_widget[event_type]
-      return unless handlers && !handlers.empty?
-
-      handlers.each { |handler| handler.call(payload) }
-    end
-
-    def dispatch_signal(signal_handlers, object_handle, signal_index, payload)
-      return unless object_handle && signal_handlers
-
-      per_widget = signal_handlers[object_handle.address]
-      return unless per_widget
-
-      per_widget.each_value do |entry|
-        next unless entry[:index] == signal_index
-
-        entry[:blocks].each { |handler| handler.call(payload) }
-      end
     end
   end
 end

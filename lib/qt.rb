@@ -21,6 +21,8 @@ require_relative 'qt/children_tracking'
 require_relative 'qt/application_lifecycle'
 require_relative 'qt/bridge'
 require_relative 'qt/native'
+require_relative 'qt/event_runtime_dispatch'
+require_relative 'qt/event_runtime_widget_methods'
 require_relative 'qt/event_runtime'
 require GENERATED_WIDGETS
 
