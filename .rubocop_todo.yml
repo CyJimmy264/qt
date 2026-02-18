@@ -61,7 +61,7 @@ Lint/UselessAssignment:
 # Offense count: 28
 # Configuration parameters: AllowedMethods, AllowedPatterns, CountRepeatedAttributes.
 Metrics/AbcSize:
-  Max: 76
+  Max: 45
 
 # Offense count: 12
 # Configuration parameters: CountComments, CountAsOne, AllowedMethods, AllowedPatterns.

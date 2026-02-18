@@ -299,48 +299,55 @@ def ast_record_class_members(node, class_name, methods_by_class, ctors_by_class,
   [method_decl_count, ctor_decl_count]
 end
 
+def init_ast_class_index_data
+  {
+    methods_by_class: Hash.new { |h, k| h[k] = Hash.new { |h2, k2| h2[k2] = [] } },
+    bases_by_class: Hash.new { |h, k| h[k] = [] },
+    ctors_by_class: Hash.new { |h, k| h[k] = [] },
+    ctor_decls_by_class: Hash.new { |h, k| h[k] = [] },
+    abstract_by_class: Hash.new(false),
+    method_decl_count: 0,
+    ctor_decl_count: 0
+  }
+end
+
+def ast_index_track_record_decl(node, data)
+  class_name = node['name']
+  return if class_name.nil? || class_name.empty?
+
+  data[:abstract_by_class][class_name] ||= node.dig('definitionData', 'isAbstract') == true
+  ast_record_base_classes(node, class_name, data[:bases_by_class])
+  method_count, ctor_count = ast_record_class_members(
+    node, class_name, data[:methods_by_class], data[:ctors_by_class], data[:ctor_decls_by_class]
+  )
+  data[:method_decl_count] += method_count
+  data[:ctor_decl_count] += ctor_count
+end
+
+def finalize_ast_class_index!(data)
+  data[:bases_by_class].each_value(&:uniq!)
+  data[:ctors_by_class].each_value(&:uniq!)
+  debug_log("ast_class_index classes=#{data[:methods_by_class].length} method_decls=#{data[:method_decl_count]}")
+  debug_log("ast_class_index ctor_decls=#{data[:ctor_decl_count]}")
+  data.slice(:methods_by_class, :bases_by_class, :ctors_by_class, :ctor_decls_by_class, :abstract_by_class)
+end
+
 def ast_class_index(ast)
   @ast_class_index_cache ||= {}
   cached = @ast_class_index_cache[ast.object_id]
   return cached if cached
 
-  methods_by_class = Hash.new { |h, k| h[k] = Hash.new { |h2, k2| h2[k2] = [] } }
-  bases_by_class = Hash.new { |h, k| h[k] = [] }
-  ctors_by_class = Hash.new { |h, k| h[k] = [] }
-  ctor_decls_by_class = Hash.new { |h, k| h[k] = [] }
-  abstract_by_class = Hash.new(false)
-  method_decl_count = 0
-  ctor_decl_count = 0
+  data = init_ast_class_index_data
 
   timed('ast_class_index_build') do
     walk_ast(ast) do |node|
       next unless node['kind'] == 'CXXRecordDecl'
 
-      class_name = node['name']
-      next if class_name.nil? || class_name.empty?
-      abstract_by_class[class_name] ||= node.dig('definitionData', 'isAbstract') == true
-
-      ast_record_base_classes(node, class_name, bases_by_class)
-      method_count, ctor_count = ast_record_class_members(
-        node, class_name, methods_by_class, ctors_by_class, ctor_decls_by_class
-      )
-      method_decl_count += method_count
-      ctor_decl_count += ctor_count
+      ast_index_track_record_decl(node, data)
     end
   end
 
-  bases_by_class.each_value(&:uniq!)
-  ctors_by_class.each_value(&:uniq!)
-  debug_log("ast_class_index classes=#{methods_by_class.length} method_decls=#{method_decl_count}")
-  debug_log("ast_class_index ctor_decls=#{ctor_decl_count}")
-
-  @ast_class_index_cache[ast.object_id] = {
-    methods_by_class: methods_by_class,
-    bases_by_class: bases_by_class,
-    ctors_by_class: ctors_by_class,
-    ctor_decls_by_class: ctor_decls_by_class,
-    abstract_by_class: abstract_by_class
-  }
+  @ast_class_index_cache[ast.object_id] = finalize_ast_class_index!(data)
 end
 
 def collect_method_decls(ast, class_name, method_name)
@@ -507,11 +514,8 @@ def collect_method_names_with_bases(ast, class_name, visited = {})
   combined
 end
 
-def resolve_auto_method(ast, qt_class, auto_entry)
-  @resolve_auto_method_cache ||= {}
-  int_cast_types = ast_int_cast_type_set(ast)
-  entry = auto_entry.is_a?(String) ? { qt_name: auto_entry } : auto_entry.dup
-  cache_key = [
+def resolve_auto_method_cache_key(ast, qt_class, entry)
+  [
     ast.object_id,
     qt_class,
     entry[:qt_name],
@@ -520,13 +524,10 @@ def resolve_auto_method(ast, qt_class, auto_entry)
     Array(entry[:param_types]).map { |t| normalized_cpp_type_name(t) },
     Array(entry[:arg_casts])
   ]
-  return @resolve_auto_method_cache[cache_key] if @resolve_auto_method_cache.key?(cache_key)
+end
 
-  qt_name = entry.fetch(:qt_name)
-  decls = collect_method_decls_with_bases(ast, qt_class, qt_name)
-  return @resolve_auto_method_cache[cache_key] = nil if decls.empty?
-
-  built = decls.filter_map do |decl|
+def build_auto_method_candidates(decls, entry, qt_class, int_cast_types)
+  decls.filter_map do |decl|
     next unless decl['__effective_access'] == 'public'
     next if deprecated_method_decl?(decl)
     next unless auto_exportable_method_name?(decl['name'])
@@ -542,20 +543,82 @@ def resolve_auto_method(ast, qt_class, auto_entry)
       param_types: parsed[:params].map { |param| normalized_cpp_type_name(param[:type]) }
     }
   end
-  return @resolve_auto_method_cache[cache_key] = nil if built.empty?
+end
+
+def filter_auto_method_candidates(candidates, entry)
+  filtered = candidates
 
   if entry[:param_count]
-    built.select! { |candidate| candidate[:method][:args].length == entry[:param_count] }
-    return @resolve_auto_method_cache[cache_key] = nil if built.empty?
+    filtered = filtered.select { |candidate| candidate[:method][:args].length == entry[:param_count] }
   end
 
   if entry[:param_types]
     expected = entry[:param_types].map { |t| normalized_cpp_type_name(t) }
-    built.select! { |candidate| candidate[:param_types] == expected }
-    return @resolve_auto_method_cache[cache_key] = nil if built.empty?
+    filtered = filtered.select { |candidate| candidate[:param_types] == expected }
   end
 
+  filtered
+end
+
+def resolve_auto_method(ast, qt_class, auto_entry)
+  @resolve_auto_method_cache ||= {}
+  int_cast_types = ast_int_cast_type_set(ast)
+  entry = auto_entry.is_a?(String) ? { qt_name: auto_entry } : auto_entry.dup
+  cache_key = resolve_auto_method_cache_key(ast, qt_class, entry)
+  return @resolve_auto_method_cache[cache_key] if @resolve_auto_method_cache.key?(cache_key)
+
+  qt_name = entry.fetch(:qt_name)
+  decls = collect_method_decls_with_bases(ast, qt_class, qt_name)
+  return @resolve_auto_method_cache[cache_key] = nil if decls.empty?
+
+  built = build_auto_method_candidates(decls, entry, qt_class, int_cast_types)
+  return @resolve_auto_method_cache[cache_key] = nil if built.empty?
+
+  built = filter_auto_method_candidates(built, entry)
+  return @resolve_auto_method_cache[cache_key] = nil if built.empty?
+
   @resolve_auto_method_cache[cache_key] = built.min_by { |candidate| candidate[:method][:args].length }[:method]
+end
+
+def auto_entries_for_spec(spec, ast)
+  auto_mode = spec[:auto_methods]
+  return Array(auto_mode) unless auto_mode == :all
+
+  names = collect_method_names_with_bases(ast, spec[:qt_class]).select { |name| auto_exportable_method_name?(name) }
+  rules = spec.fetch(:auto_method_rules, {})
+  names.sort.map do |name|
+    rule = rules[name.to_sym] || rules[name]
+    rule ? { qt_name: name }.merge(rule) : { qt_name: name }
+  end
+end
+
+def resolve_auto_methods_for_spec(ast, spec, auto_entries, manual_methods, auto_mode)
+  existing_names = manual_methods.to_set { |m| m[:qt_name] }
+  spec_resolved = 0
+  spec_skipped = 0
+
+  auto_methods = auto_entries.filter_map do |entry|
+    qt_name = entry.is_a?(String) ? entry : entry[:qt_name]
+    if existing_names.include?(qt_name)
+      spec_skipped += 1
+      next
+    end
+
+    resolved = resolve_auto_method(ast, spec[:qt_class], entry)
+    if resolved.nil?
+      if auto_mode == :all
+        spec_skipped += 1
+        next
+      end
+
+      raise "Failed to auto-resolve #{spec[:qt_class]}##{qt_name}"
+    end
+
+    spec_resolved += 1
+    resolved
+  end
+
+  [auto_methods, spec_resolved, spec_skipped]
 end
 
 def expand_auto_methods(specs, ast)
@@ -566,45 +629,14 @@ def expand_auto_methods(specs, ast)
   specs.map do |spec|
     spec_start = monotonic_now
     auto_mode = spec[:auto_methods]
-    auto_entries = case auto_mode
-                   when :all
-                     names = collect_method_names_with_bases(ast, spec[:qt_class]).select { |name| auto_exportable_method_name?(name) }
-                     rules = spec.fetch(:auto_method_rules, {})
-                     names.sort.map do |name|
-                       rule = rules[name.to_sym] || rules[name]
-                       rule ? { qt_name: name }.merge(rule) : { qt_name: name }
-                     end
-                   else
-                     Array(spec[:auto_methods])
-                   end
+    auto_entries = auto_entries_for_spec(spec, ast)
     manual_methods = Array(spec[:methods])
     next spec if auto_entries.empty?
 
     spec_candidates = auto_entries.length
-    spec_resolved = 0
-    spec_skipped = 0
-
-    existing_names = manual_methods.to_set { |m| m[:qt_name] }
-    auto_methods = auto_entries.filter_map do |entry|
-      qt_name = entry.is_a?(String) ? entry : entry[:qt_name]
-      if existing_names.include?(qt_name)
-        spec_skipped += 1
-        next
-      end
-
-      resolved = resolve_auto_method(ast, spec[:qt_class], entry)
-      if resolved.nil?
-        if auto_mode == :all
-          spec_skipped += 1
-          next
-        end
-
-        raise "Failed to auto-resolve #{spec[:qt_class]}##{qt_name}"
-      end
-
-      spec_resolved += 1
-      resolved
-    end
+    auto_methods, spec_resolved, spec_skipped = resolve_auto_methods_for_spec(
+      ast, spec, auto_entries, manual_methods, auto_mode
+    )
 
     total_candidates += spec_candidates
     total_resolved += spec_resolved
@@ -1160,25 +1192,7 @@ def generate_ruby_qapplication(lines, spec)
   lines << '        Thread.current[:qt_ruby_current_app] = app'
   lines << '      end'
 
-  Array(spec[:class_methods]).each do |method|
-    ruby_name = ruby_safe_method_name(method[:ruby_name])
-    snake_alias = to_snake(ruby_name)
-    method_arg_hashes = Array(method[:args]).map { |name| { name: name } }
-    arg_map = ruby_arg_name_map(method_arg_hashes)
-    args = method_arg_hashes.map { |arg| arg_map[arg[:name]] }.join(', ')
-
-    lines << ''
-    lines << "      def #{ruby_name}(#{args})"
-    if method[:native]
-      native_args = method_arg_hashes.map { |arg| arg_map[arg[:name]] }.join(', ')
-      call_suffix = native_args.empty? ? '' : "(#{native_args})"
-      lines << "        Native.#{method[:native]}#{call_suffix}"
-    else
-      lines << '        nil'
-    end
-    lines << '      end'
-    lines << "      alias_method :#{snake_alias}, :#{ruby_name}" if snake_alias != ruby_name
-  end
+  Array(spec[:class_methods]).each { |method| append_ruby_qapplication_class_method(lines, method) }
 
   lines << '    end'
   lines << ''
@@ -1186,21 +1200,24 @@ def generate_ruby_qapplication(lines, spec)
   lines << ''
 end
 
-def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_ruby)
-  inherited_methods = inherited_methods_for_spec(spec, specs_by_qt, super_qt_by_qt)
-  all_methods = (inherited_methods + spec[:methods]).uniq { |m| m[:qt_name] }
-  metadata = ruby_api_metadata(all_methods)
+def append_ruby_qapplication_class_method(lines, method)
+  ruby_name = ruby_safe_method_name(method[:ruby_name])
+  snake_alias = to_snake(ruby_name)
+  method_arg_hashes = Array(method[:args]).map { |name| { name: name } }
+  arg_map = ruby_arg_name_map(method_arg_hashes)
+  args = method_arg_hashes.map { |arg| arg_map[arg[:name]] }.join(', ')
+  native_args = method_arg_hashes.map { |arg| arg_map[arg[:name]] }.join(', ')
+  call_suffix = native_args.empty? ? '' : "(#{native_args})"
 
-  super_qt = super_qt_by_qt[spec[:qt_class]]
-  super_ruby = super_qt ? qt_to_ruby[super_qt] : nil
-  widget_based = spec[:qt_class] != 'QWidget' && widget_based_qt_class?(spec[:qt_class], super_qt_by_qt)
-  widget_root = spec[:ruby_class] == 'QWidget'
+  lines << ''
+  lines << "      def #{ruby_name}(#{args})"
+  lines << (method[:native] ? "        Native.#{method[:native]}#{call_suffix}" : '        nil')
+  lines << '      end'
+  lines << "      alias_method :#{snake_alias}, :#{ruby_name}" if snake_alias != ruby_name
+end
 
-  class_decl = if super_ruby
-                 "  class #{spec[:ruby_class]} < #{super_ruby}"
-               else
-                 "  class #{spec[:ruby_class]}"
-               end
+def generate_ruby_widget_class_header(lines, spec, metadata:, super_ruby:, widget_root:)
+  class_decl = super_ruby ? "  class #{spec[:ruby_class]} < #{super_ruby}" : "  class #{spec[:ruby_class]}"
   lines << class_decl
   append_ruby_class_api_constants(lines, qt_class: spec[:qt_class], metadata: metadata, indent: '    ')
   lines << ''
@@ -1210,9 +1227,9 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
   lines << '    include ChildrenTracking' if widget_root
   lines << '    include EventRuntime::WidgetMethods' if widget_root
   lines << ''
-  append_widget_initializer(lines, spec: spec, widget_root: widget_root, indent: '    ')
-  lines << ''
+end
 
+def append_ruby_widget_methods(lines, spec)
   spec[:methods].each do |method|
     call_args = ['@handle'] + method[:args].map { |arg| arg[:name] }
     native_call = "Native.#{spec[:prefix]}_#{to_snake(method[:qt_name])}(#{call_args.join(', ')})"
@@ -1220,25 +1237,38 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
     append_ruby_property_writer(lines, method: method, indent: '    ')
     lines << ''
   end
+end
+
+def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_ruby)
+  inherited_methods = inherited_methods_for_spec(spec, specs_by_qt, super_qt_by_qt)
+  all_methods = (inherited_methods + spec[:methods]).uniq { |m| m[:qt_name] }
+  metadata = ruby_api_metadata(all_methods)
+
+  super_qt = super_qt_by_qt[spec[:qt_class]]
+  super_ruby = super_qt ? qt_to_ruby[super_qt] : nil
+  widget_root = spec[:ruby_class] == 'QWidget'
+  widget_based = spec[:qt_class] != 'QWidget' && widget_based_qt_class?(spec[:qt_class], super_qt_by_qt)
+
+  generate_ruby_widget_class_header(lines, spec, metadata: metadata, super_ruby: super_ruby, widget_root: widget_root)
+  append_widget_initializer(lines, spec: spec, widget_root: widget_root, indent: '    ')
+  lines << ''
+  append_ruby_widget_methods(lines, spec)
 
   lines << '  end'
   lines << ''
 end
 
-def generate_ruby_widgets(specs, super_qt_by_qt, wrapper_qt_classes)
-  lines = []
-  lines << '# frozen_string_literal: true'
-  lines << ''
-  lines << 'module Qt'
-
-  qapplication_spec = specs.find { |spec| spec[:ruby_class] == 'QApplication' }
-  generate_ruby_qapplication(lines, qapplication_spec)
-
-  specs_by_qt = specs.each_with_object({}) { |s, map| map[s[:qt_class]] = s }
+def build_qt_to_ruby_map(specs, wrapper_qt_classes)
   qt_to_ruby = specs.each_with_object({}) { |s, map| map[s[:qt_class]] = s[:ruby_class] }
   wrapper_qt_classes.each { |qt_class| qt_to_ruby[qt_class] = qt_class }
-  qts_to_emit = (wrapper_qt_classes + specs.map { |s| s[:qt_class] }.reject { |q| q == 'QApplication' }).uniq
+  qt_to_ruby
+end
 
+def qts_to_emit(specs, wrapper_qt_classes)
+  (wrapper_qt_classes + specs.map { |s| s[:qt_class] }.reject { |q| q == 'QApplication' }).uniq
+end
+
+def emit_qt_classes(lines, qts_to_emit, specs_by_qt, super_qt_by_qt, qt_to_ruby)
   emitted = {}
   emit_qt = lambda do |qt_class|
     return if emitted[qt_class]
@@ -1255,8 +1285,22 @@ def generate_ruby_widgets(specs, super_qt_by_qt, wrapper_qt_classes)
 
     emitted[qt_class] = true
   end
-
   qts_to_emit.sort.each { |qt_class| emit_qt.call(qt_class) }
+end
+
+def generate_ruby_widgets(specs, super_qt_by_qt, wrapper_qt_classes)
+  lines = []
+  lines << '# frozen_string_literal: true'
+  lines << ''
+  lines << 'module Qt'
+
+  qapplication_spec = specs.find { |spec| spec[:ruby_class] == 'QApplication' }
+  generate_ruby_qapplication(lines, qapplication_spec)
+
+  specs_by_qt = specs.each_with_object({}) { |s, map| map[s[:qt_class]] = s }
+  qt_to_ruby = build_qt_to_ruby_map(specs, wrapper_qt_classes)
+  emitted_qts = qts_to_emit(specs, wrapper_qt_classes)
+  emit_qt_classes(lines, emitted_qts, specs_by_qt, super_qt_by_qt, qt_to_ruby)
 
   lines << 'end'
   lines.join("\n") + "\n"
