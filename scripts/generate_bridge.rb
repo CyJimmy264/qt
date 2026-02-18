@@ -324,16 +324,27 @@ def ast_record_constructor_member?(inner, class_name, current_access, ctors_by_c
   true
 end
 
-def init_ast_class_index_data
+def ast_class_index_method_collections
   {
     methods_by_class: Hash.new { |h, k| h[k] = Hash.new { |h2, k2| h2[k2] = [] } },
-    bases_by_class: Hash.new { |h, k| h[k] = [] },
+    bases_by_class: Hash.new { |h, k| h[k] = [] }
+  }
+end
+
+def ast_class_index_constructor_collections
+  {
     ctors_by_class: Hash.new { |h, k| h[k] = [] },
     ctor_decls_by_class: Hash.new { |h, k| h[k] = [] },
-    abstract_by_class: Hash.new(false),
-    method_decl_count: 0,
-    ctor_decl_count: 0
+    abstract_by_class: Hash.new(false)
   }
+end
+
+def ast_class_index_collections
+  ast_class_index_method_collections.merge(ast_class_index_constructor_collections)
+end
+
+def init_ast_class_index_data
+  ast_class_index_collections.merge(method_decl_count: 0, ctor_decl_count: 0)
 end
 
 def ast_index_track_record_decl(node, data)
@@ -466,12 +477,18 @@ def map_pointer_cpp_return_type(type)
   nil
 end
 
+def parse_method_param_nodes(method_decl)
+  Array(method_decl['inner']).select { |node| node['kind'] == 'ParmVarDecl' }
+end
+
+def parse_method_param(param, idx)
+  { name: (param['name'] || "arg#{idx + 1}"), type: param.dig('type', 'qualType').to_s, has_default: !param['init'].nil? }
+end
+
 def parse_method_params(method_decl)
-  params = Array(method_decl['inner']).select { |node| node['kind'] == 'ParmVarDecl' }
+  params = parse_method_param_nodes(method_decl)
   required_arg_count = params.count { |param| param['init'].nil? }
-  parsed_params = params.each_with_index.map do |param, idx|
-    { name: (param['name'] || "arg#{idx + 1}"), type: param.dig('type', 'qualType').to_s, has_default: !param['init'].nil? }
-  end
+  parsed_params = params.each_with_index.map { |param, idx| parse_method_param(param, idx) }
   [parsed_params, required_arg_count]
 end
 
@@ -1205,20 +1222,35 @@ def cpp_bridge_prelude
 end
 
 def generate_bridge_api(specs)
-  lines = []
-  lines << '# frozen_string_literal: true'
-  lines << ''
-  lines << 'module Qt'
-  lines << '  module BridgeAPI'
-  lines << '    FUNCTIONS = ['
+  lines = bridge_api_prelude_lines
+  append_bridge_api_function_lines(lines, specs)
+  lines.concat(bridge_api_closure_lines)
+  lines.join("\n") + "\n"
+end
+
+def bridge_api_prelude_lines
+  [
+    '# frozen_string_literal: true',
+    '',
+    'module Qt',
+    '  module BridgeAPI',
+    '    FUNCTIONS = ['
+  ]
+end
+
+def append_bridge_api_function_lines(lines, specs)
   all_ffi_functions(specs).each do |fn|
     args = fn[:args].map { |arg| ":#{arg}" }.join(', ')
     lines << "      { name: :#{fn[:name]}, args: [#{args}], return: :#{fn[:ffi_return]} },"
   end
-  lines << '    ].freeze'
-  lines << '  end'
-  lines << 'end'
-  lines.join("\n") + "\n"
+end
+
+def bridge_api_closure_lines
+  [
+    '    ].freeze',
+    '  end',
+    'end'
+  ]
 end
 
 def ruby_api_metadata(methods)
