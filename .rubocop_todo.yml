@@ -15,7 +15,7 @@ Metrics/BlockLength:
 # Offense count: 41
 # Configuration parameters: CountComments, CountAsOne, AllowedMethods, AllowedPatterns.
 Metrics/MethodLength:
-  Max: 12
+  Max: 11
 
 # Offense count: 25
 # This cop supports safe autocorrection (--autocorrect).
@@ -24,10 +24,3 @@ Metrics/MethodLength:
 Layout/LineLength:
   Exclude:
     - 'examples/development_ordered_demos/06_timetrap_clockify.rb'
-
-# Offense count: 8
-# Configuration parameters: AllowedConstants.
-Style/Documentation:
-  Exclude:
-    - 'spec/**/*'
-    - 'test/**/*'

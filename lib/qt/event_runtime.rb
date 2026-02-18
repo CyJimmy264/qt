@@ -12,8 +12,7 @@ module Qt
       ensure_event_callback!
 
       event_type = event_type_for(event_name)
-      handle = widget_handle(widget)
-      raise ArgumentError, 'widget handle is required' unless handle
+      handle = widget_handle(widget) || raise(ArgumentError, 'widget handle is required')
 
       @event_handlers ||= {}
       per_widget = (@event_handlers[handle.address] ||= {})
@@ -30,9 +29,7 @@ module Qt
       ensure_native_bridge_ready!
       ensure_signal_callback!
 
-      handle = widget_handle(widget)
-      raise ArgumentError, 'widget handle is required' unless handle
-
+      handle = widget_handle(widget) || raise(ArgumentError, 'widget handle is required')
       per_signal = prepare_signal_registration(handle, signal_name)
       per_signal[:blocks] << block
       true
@@ -56,33 +53,28 @@ module Qt
 
     def off_signal(widget, signal_name = nil)
       ensure_native_bridge_ready!
-      return false unless (handle = widget_handle(widget)) && @signal_handlers
-      return false unless (per_widget = @signal_handlers[handle.address])
+      handle = widget_handle(widget)
+      return false if handle.nil? || @signal_handlers.nil?
 
-      if signal_name
-        signal_key = signal_name.to_s
-        per_widget.delete(signal_key)
-        Qt::Native.qobject_disconnect_signal(handle, signal_key)
-      else
-        per_widget.clear
-        Qt::Native.qobject_disconnect_signal(handle, nil)
-      end
+      per_widget = @signal_handlers[handle.address]
+      return false if per_widget.nil?
+
+      signal_key = signal_name&.to_s
+      per_widget.delete(signal_key) if signal_key
+      per_widget.clear unless signal_key
+      Qt::Native.qobject_disconnect_signal(handle, signal_key)
       true
     end
 
     def off_event(widget, event_name = nil)
       ensure_native_bridge_ready!
-      return false unless (handle = widget_handle(widget)) && @event_handlers
-      return false unless (per_widget = @event_handlers[handle.address])
+      handle = widget_handle(widget)
+      return false if handle.nil? || @event_handlers.nil?
 
-      if event_name
-        event_type = event_type_for(event_name)
-        per_widget.delete(event_type)
-        Qt::Native.unwatch_qobject_event(handle, event_type)
-      else
-        per_widget.each_key { |event_type| Qt::Native.unwatch_qobject_event(handle, event_type) }
-        @event_handlers.delete(handle.address)
-      end
+      per_widget = @event_handlers[handle.address]
+      return false unless per_widget
+
+      off_event_for_widget(handle, per_widget, event_name)
       true
     end
 
@@ -133,6 +125,17 @@ module Qt
     def ensure_native_bridge_ready!
       Qt::Native.ensure_loaded!
       Qt::Native.define_bridge_wrappers!
+    end
+
+    def off_event_for_widget(handle, per_widget, event_name)
+      if event_name
+        event_type = event_type_for(event_name)
+        per_widget.delete(event_type)
+        Qt::Native.unwatch_qobject_event(handle, event_type)
+      else
+        per_widget.each_key { |event_type| Qt::Native.unwatch_qobject_event(handle, event_type) }
+        @event_handlers.delete(handle.address)
+      end
     end
   end
 end

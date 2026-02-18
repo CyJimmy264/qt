@@ -145,13 +145,7 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
     skip 'native bridge is not available' unless Qt::Native.available?
 
     with_qapplication do
-      window = QWidget.new
-      payloads = []
-      window.on(:resize) { |ev| payloads << ev }
-      show_and_process_events(window)
-      window.set_geometry(20, 30, 400, 260)
-      wait_for_non_empty_payloads(payloads)
-      skip 'resize event was not delivered in this Qt platform environment' if payloads.empty?
+      payloads = capture_resize_payloads
       ev = find_resize_payload(payloads, 400, 260)
       skip 'resize to target geometry was not observed in this Qt platform environment' unless ev
     end
@@ -161,14 +155,7 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
     skip 'native bridge is not available' unless Qt::Native.available?
 
     with_qapplication do
-      window = QWidget.new
-      button = QPushButton.new(window)
-      calls = []
-      button.connect('clicked(bool)') { |payload| calls << payload }
-      button.show
-      show_and_process_events(window)
-      button.click
-      wait_for_non_empty_payloads(calls)
+      calls = capture_clicked_bool_calls
       verify_clicked_signal_delivered(calls)
     end
   end
@@ -192,6 +179,29 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
     skip 'clicked(bool) signal was not delivered in this Qt platform environment' if calls.empty?
 
     assert_operator calls.length, :>=, 1
+  end
+
+  def capture_resize_payloads
+    window = QWidget.new
+    payloads = []
+    window.on(:resize) { |ev| payloads << ev }
+    show_and_process_events(window)
+    window.set_geometry(20, 30, 400, 260)
+    wait_for_non_empty_payloads(payloads)
+    skip 'resize event was not delivered in this Qt platform environment' if payloads.empty?
+    payloads
+  end
+
+  def capture_clicked_bool_calls
+    window = QWidget.new
+    button = QPushButton.new(window)
+    calls = []
+    button.connect('clicked(bool)') { |payload| calls << payload }
+    button.show
+    show_and_process_events(window)
+    button.click
+    wait_for_non_empty_payloads(calls)
+    calls
   end
 
   def show_and_process_events(widget)

@@ -71,8 +71,7 @@ def trace_generated_super_chain(fetch_bases, known_qt, qt_class, super_qt_by_qt)
     super_qt_by_qt[prev] ||= base
     break if known_qt.include?(base)
 
-    prev = base
-    cur = base
+    prev = cur = base
   end
 end
 
@@ -114,11 +113,7 @@ def inherited_methods_for_spec(spec, specs_by_qt, super_qt_by_qt)
 end
 
 def generate_ruby_wrapper_class(lines, qt_class, super_ruby)
-  class_decl = if super_ruby
-                 "  class #{qt_class} < #{super_ruby}"
-               else
-                 "  class #{qt_class}"
-               end
+  class_decl = ruby_wrapper_class_decl(qt_class, super_ruby)
   lines << class_decl
   lines << "    QT_CLASS = '#{qt_class}'.freeze"
   lines << '    QT_API_QT_METHODS = [].freeze'
@@ -126,6 +121,12 @@ def generate_ruby_wrapper_class(lines, qt_class, super_ruby)
   lines << '    QT_API_PROPERTIES = [].freeze'
   lines << '  end'
   lines << ''
+end
+
+def ruby_wrapper_class_decl(qt_class, super_ruby)
+  return "  class #{qt_class}" unless super_ruby
+
+  "  class #{qt_class} < #{super_ruby}"
 end
 
 def find_getter_decl(ast, qt_class, property)
@@ -323,18 +324,19 @@ def generate_cpp_bridge(specs)
   lines = required_includes(GENERATOR_SCOPE).map { |inc| "#include <#{inc}>" }
   append_block(lines, cpp_bridge_prelude)
 
-  specs.each do |spec|
-    generate_cpp_constructor(lines, spec)
-    lines << ''
-
-    spec[:methods].each do |method|
-      generate_cpp_method(lines, spec, method)
-      lines << ''
-    end
-  end
+  specs.each { |spec| append_cpp_spec_methods(lines, spec) }
 
   generate_cpp_delete(lines)
   "#{lines.join("\n")}\n"
+end
+
+def append_cpp_spec_methods(lines, spec)
+  generate_cpp_constructor(lines, spec)
+  lines << ''
+  spec[:methods].each do |method|
+    generate_cpp_method(lines, spec, method)
+    lines << ''
+  end
 end
 
 def append_block(lines, block)

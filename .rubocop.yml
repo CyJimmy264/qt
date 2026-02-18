@@ -41,6 +41,11 @@ Metrics/ModuleLength:
     - heredoc
     - method_call
 
+Style/Documentation:
+  Exclude:
+    - 'spec/**/*'
+    - 'test/**/*'
+
 Naming/PredicateMethod:
   AllowedMethods:
     - on_event

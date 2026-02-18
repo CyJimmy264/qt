@@ -1,5 +1,73 @@
 # frozen_string_literal: true
 
+# Collects enum/typedef names that should be cast as integers for FFI.
+class IntCastTypeCollector
+  INTEGER_ALIAS_PATTERN = /\A(?:unsigned\s+|signed\s+)?(?:char|short|int|long|long long)\z/
+
+  def initialize(ast)
+    @ast = ast
+    @types = Set.new
+  end
+
+  def collect
+    walk_ast_scoped(@ast) do |node, scope|
+      name = node['name']
+      next if name.nil? || name.empty?
+
+      qualified = (scope + [name]).join('::')
+      ast_append_int_cast_type!(@types, INTEGER_ALIAS_PATTERN, node, qualified)
+    end
+    @types
+  end
+end
+
+# Records method/constructor declarations and effective access for a class AST node.
+class AstClassMemberRecorder
+  def initialize(class_name, methods_by_class, ctors_by_class, ctor_decls_by_class)
+    @class_name = class_name
+    @methods_by_class = methods_by_class
+    @ctors_by_class = ctors_by_class
+    @ctor_decls_by_class = ctor_decls_by_class
+  end
+
+  def record(node)
+    current_access = node['tagUsed'] == 'struct' ? 'public' : 'private'
+    method_decl_count = ctor_decl_count = 0
+    Array(node['inner']).each do |inner|
+      current_access, method_decl_count, ctor_decl_count = record_inner(
+        inner, current_access, method_decl_count, ctor_decl_count
+      )
+    end
+    [method_decl_count, ctor_decl_count]
+  end
+
+  private
+
+  def record_inner(inner, current_access, method_decl_count, ctor_decl_count)
+    return [inner['access'] || current_access, method_decl_count, ctor_decl_count] if inner['kind'] == 'AccessSpecDecl'
+    return [current_access, method_decl_count + 1, ctor_decl_count] if record_method_member?(inner, current_access)
+    return [current_access, method_decl_count, ctor_decl_count + 1] if record_constructor_member?(inner, current_access)
+
+    [current_access, method_decl_count, ctor_decl_count]
+  end
+
+  def record_method_member?(inner, current_access)
+    return false unless inner['kind'] == 'CXXMethodDecl' && inner['name']
+
+    access = inner['access'] || current_access
+    @methods_by_class[@class_name][inner['name']] << inner.merge('__effective_access' => access)
+    true
+  end
+
+  def record_constructor_member?(inner, current_access)
+    return false unless inner['kind'] == 'CXXConstructorDecl' && inner['name']
+
+    @ctors_by_class[@class_name] << inner['name']
+    @ctor_decls_by_class[@class_name] << inner.merge('__effective_access' => current_access)
+    true
+  end
+end
+
 def pkg_config_cflags
   cflags = `pkg-config --cflags Qt6Widgets 2>/dev/null`.strip
   raise 'pkg-config Qt6Widgets is required' if cflags.empty?
@@ -55,21 +123,9 @@ end
 
 def ast_int_cast_type_set(ast)
   @ast_int_cast_type_set_cache ||= {}.compare_by_identity
-  cached = @ast_int_cast_type_set_cache[ast]
-  return cached if cached
+  return @ast_int_cast_type_set_cache[ast] if @ast_int_cast_type_set_cache.key?(ast)
 
-  types = Set.new
-  integer_alias_pattern = /\A(?:unsigned\s+|signed\s+)?(?:char|short|int|long|long long)\z/
-
-  walk_ast_scoped(ast) do |node, scope|
-    name = node['name']
-    next if name.nil? || name.empty?
-
-    qualified = (scope + [name]).join('::')
-    ast_append_int_cast_type!(types, integer_alias_pattern, node, qualified)
-  end
-
-  @ast_int_cast_type_set_cache[ast] = types
+  @ast_int_cast_type_set_cache[ast] = IntCastTypeCollector.new(ast).collect
 end
 
 def collect_class_api(ast, class_name)
@@ -100,34 +156,9 @@ def ast_record_base_classes(node, class_name, bases_by_class)
 end
 
 def ast_record_class_members(node, class_name, methods_by_class, ctors_by_class, ctor_decls_by_class)
-  current_access = node['tagUsed'] == 'struct' ? 'public' : 'private'
-  method_decl_count = ctor_decl_count = 0
-  Array(node['inner']).each do |inner|
-    if inner['kind'] == 'AccessSpecDecl'
-      current_access = inner['access'] || current_access
-    elsif ast_record_method_member?(inner, class_name, current_access, methods_by_class)
-      method_decl_count += 1
-    elsif ast_record_constructor_member?(inner, class_name, current_access, ctors_by_class, ctor_decls_by_class)
-      ctor_decl_count += 1
-    end
-  end
-  [method_decl_count, ctor_decl_count]
-end
-
-def ast_record_method_member?(inner, class_name, current_access, methods_by_class)
-  return false unless inner['kind'] == 'CXXMethodDecl' && inner['name']
-
-  access = inner['access'] || current_access
-  methods_by_class[class_name][inner['name']] << inner.merge('__effective_access' => access)
-  true
-end
-
-def ast_record_constructor_member?(inner, class_name, current_access, ctors_by_class, ctor_decls_by_class)
-  return false unless inner['kind'] == 'CXXConstructorDecl' && inner['name']
-
-  ctors_by_class[class_name] << inner['name']
-  ctor_decls_by_class[class_name] << inner.merge('__effective_access' => current_access)
-  true
+  AstClassMemberRecorder.new(
+    class_name, methods_by_class, ctors_by_class, ctor_decls_by_class
+  ).record(node)
 end
 
 def ast_class_index_method_collections
