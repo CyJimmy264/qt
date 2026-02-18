@@ -22,7 +22,7 @@ module Qt
         properties: q_inspect_property_values
       }
     end
-    alias_method :qt_inspect, :q_inspect
-    alias_method :to_h, :q_inspect
+    alias qt_inspect q_inspect
+    alias to_h q_inspect
   end
 end

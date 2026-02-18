@@ -68,8 +68,10 @@ actions = [
   { key: :theme, text: 'TOGGLE THEME' }
 ]
 
-actions.each { |a| a[:view] = QPushButton.new(window) }
-actions.each { |a| a[:view].set_text(a[:text]) }
+actions.each do |action|
+  action[:view] = QPushButton.new(window)
+  action[:view].set_text(action[:text])
+end
 
 status = QLabel.new(window)
 status.set_alignment(Qt::AlignCenter)

@@ -173,7 +173,7 @@ perform_action = lambda do |key|
       puts "[inspect] #{data}"
       status.set_text("Inspect OK\n#{data[:ruby_class]}")
     else
-      status.set_text("Inspect: no items")
+      status.set_text('Inspect: no items')
     end
   when :remove
     last = items.pop

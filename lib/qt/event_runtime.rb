@@ -9,7 +9,7 @@ module Qt
         EventRuntime.on_event(self, event_name, &block)
         self
       end
-      alias_method :on_event, :on
+      alias on_event on
 
       def connect(signal_name, &block)
         raise ArgumentError, 'pass block to connect' unless block
@@ -17,20 +17,20 @@ module Qt
         EventRuntime.on_signal(self, signal_name, &block)
         self
       end
-      alias_method :on_signal, :connect
-      alias_method :slot, :connect
+      alias on_signal connect
+      alias slot connect
 
       def off(event_name = nil)
         EventRuntime.off_event(self, event_name)
         self
       end
-      alias_method :off_event, :off
+      alias off_event off
 
       def disconnect(signal_name = nil)
         EventRuntime.off_signal(self, signal_name)
         self
       end
-      alias_method :off_signal, :disconnect
+      alias off_signal disconnect
     end
 
     module_function
@@ -123,7 +123,7 @@ module Qt
         per_widget.delete(event_type)
         Qt::Native.unwatch_qobject_event(handle, event_type)
       else
-        per_widget.keys.each { |et| Qt::Native.unwatch_qobject_event(handle, et) }
+        per_widget.each_key { |event_type| Qt::Native.unwatch_qobject_event(handle, event_type) }
         @event_handlers.delete(handle.address)
       end
 

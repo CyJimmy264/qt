@@ -74,21 +74,6 @@ Layout/LineLength:
     - 'examples/qtproject/widgets/widgetsgallery/main.rb'
     - 'scripts/generate_bridge.rb'
 
-# Offense count: 7
-# This cop supports safe autocorrection (--autocorrect).
-# Configuration parameters: EnforcedStyle.
-# SupportedStyles: prefer_alias, prefer_alias_method
-Style/Alias:
-  Exclude:
-    - 'lib/qt/event_runtime.rb'
-    - 'lib/qt/inspectable.rb'
-
-# Offense count: 1
-# This cop supports unsafe autocorrection (--autocorrect-all).
-Style/CombinableLoops:
-  Exclude:
-    - 'examples/qtproject/widgets/widgetsgallery/main.rb'
-
 # Offense count: 8
 # Configuration parameters: AllowedConstants.
 Style/Documentation:
@@ -103,13 +88,6 @@ Style/Documentation:
     - 'lib/qt/inspectable.rb'
     - 'lib/qt/native.rb'
 
-# Offense count: 3
-# This cop supports safe autocorrection (--autocorrect).
-# Configuration parameters: MaxUnannotatedPlaceholdersAllowed, Mode, AllowedMethods, AllowedPatterns.
-# SupportedStyles: annotated, template, unannotated
-Style/FormatStringToken:
-  EnforcedStyle: unannotated
-
 # Offense count: 5
 # Configuration parameters: AllowedVariables.
 Style/GlobalVars:
@@ -117,32 +95,9 @@ Style/GlobalVars:
     - 'ext/qt_ruby_bridge/extconf.rb'
 
 # Offense count: 1
-# This cop supports unsafe autocorrection (--autocorrect-all).
-# Configuration parameters: AllowedReceivers.
-# AllowedReceivers: Thread.current
-Style/HashEachMethods:
-  Exclude:
-    - 'lib/qt/event_runtime.rb'
-
-# Offense count: 13
-# This cop supports safe autocorrection (--autocorrect).
-Style/IfUnlessModifier:
-  Exclude:
-    - 'ext/qt_ruby_bridge/extconf.rb'
-    - 'scripts/generate_bridge.rb'
-
-# Offense count: 1
 Style/MultilineBlockChain:
   Exclude:
     - 'scripts/generate_bridge.rb'
-
-# Offense count: 1
-# This cop supports unsafe autocorrection (--autocorrect-all).
-# Configuration parameters: EnforcedStyle.
-# SupportedStyles: literals, strict
-Style/MutableConstant:
-  Exclude:
-    - 'Rakefile'
 
 # Offense count: 6
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -153,40 +108,12 @@ Style/NumericPredicate:
     - 'spec/**/*'
     - 'examples/development_ordered_demos/05_tetris_simple.rb'
 
-# Offense count: 4
-# This cop supports safe autocorrection (--autocorrect).
-Style/RescueModifier:
-  Exclude:
-    - 'examples/development_ordered_demos/06_timetrap_clockify.rb'
-
-# Offense count: 1
-# This cop supports safe autocorrection (--autocorrect).
-Style/SelfAssignment:
-  Exclude:
-    - 'lib/qt/native.rb'
-
-# Offense count: 1
-# This cop supports unsafe autocorrection (--autocorrect-all).
-# Configuration parameters: RequireEnglish, EnforcedStyle.
-# SupportedStyles: use_perl_names, use_english_names, use_builtin_english_names
-Style/SpecialGlobalVars:
-  Exclude:
-    - 'scripts/generate_bridge.rb'
-
 # Offense count: 3
 # This cop supports unsafe autocorrection (--autocorrect-all).
 # Configuration parameters: Mode.
 Style/StringConcatenation:
   Exclude:
     - 'scripts/generate_bridge.rb'
-
-# Offense count: 1
-# This cop supports safe autocorrection (--autocorrect).
-# Configuration parameters: EnforcedStyle, ConsistentQuotesInMultiline.
-# SupportedStyles: single_quotes, double_quotes
-Style/StringLiterals:
-  Exclude:
-    - 'examples/development_ordered_demos/03_component_showcase.rb'
 
 # Offense count: 4
 # This cop supports safe autocorrection (--autocorrect).
@@ -195,14 +122,6 @@ Style/StringLiterals:
 Style/SymbolArray:
   EnforcedStyle: percent
   MinSize: 3
-
-# Offense count: 1
-# This cop supports unsafe autocorrection (--autocorrect-all).
-# Configuration parameters: AllowMethodsWithArguments, AllowedMethods, AllowedPatterns, AllowComments.
-# AllowedMethods: define_method
-Style/SymbolProc:
-  Exclude:
-    - 'lib/qt/native.rb'
 
 # Offense count: 1
 # This cop supports safe autocorrection (--autocorrect).

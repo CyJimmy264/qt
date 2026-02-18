@@ -10,7 +10,7 @@ module Qt
     require GENERATED_API if File.exist?(GENERATED_API)
 
     COERCERS = {
-      string: ->(value) { value.to_s },
+      string: :to_s.to_proc,
       int: ->(value) { Integer(value) },
       pointer: lambda { |value|
         return nil if value.nil?

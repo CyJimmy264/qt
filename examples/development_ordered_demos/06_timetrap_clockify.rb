@@ -25,7 +25,11 @@ PROJECT_SLOT_COUNT = 14
 TIMETRAP_BIN = ENV.fetch('TIMETRAP_BIN', 't')
 TIMETRAP_API = defined?(Timetrap::Entry) && defined?(Timetrap::Timer)
 DEBUG_UI = ENV['TIMETRAP_UI_DEBUG'] == '1'
-AUTO_REFRESH_SEC = Integer(ENV.fetch('TIMETRAP_UI_AUTO_REFRESH_SEC', '30')) rescue 30
+AUTO_REFRESH_SEC = begin
+  Integer(ENV.fetch('TIMETRAP_UI_AUTO_REFRESH_SEC', '30'))
+rescue ArgumentError, TypeError
+  30
+end
 
 BG_APP = 'background-color: #eef2f5; border: 1px solid #d6dde5;'
 BG_SIDEBAR = 'background-color: #f7f9fb; border-right: 1px solid #d9e0e7;'
@@ -229,6 +233,12 @@ geo = lambda do |x, y, w, h|
   "x=#{x} y=#{y} w=#{w} h=#{h}"
 end
 
+parse_time_or_nil = lambda do |value|
+  Time.parse(value)
+rescue ArgumentError, TypeError
+  nil
+end
+
 fetch_entries = lambda do
   if TIMETRAP_API
     Timetrap::Entry.order(:start).all.map do |e|
@@ -253,8 +263,8 @@ fetch_entries = lambda do
           id: e['id'],
           note: e['note'].to_s,
           sheet: e['sheet'].to_s,
-          start_time: (Time.parse(e['start']) rescue nil),
-          end_time: (Time.parse(e['end']) rescue nil)
+          start_time: parse_time_or_nil.call(e['start']),
+          end_time: parse_time_or_nil.call(e['end'])
         }
       end
     rescue JSON::ParserError
@@ -270,7 +280,7 @@ fetch_active = lambda do
   else
     ok, out = run_t.call('now')
     if ok && out =~ /(\d{4}-\d{2}-\d{2} [0-9:]+ [+-]\d{4})/
-      [true, (Time.parse(Regexp.last_match(1)) rescue nil)]
+      [true, parse_time_or_nil.call(Regexp.last_match(1))]
     else
       [nil, nil]
     end
@@ -282,7 +292,7 @@ seconds_to_hms = lambda do |seconds|
   h = seconds / 3600
   m = (seconds % 3600) / 60
   s = seconds % 60
-  format('%02d:%02d:%02d', h, m, s)
+  format('%<hours>02d:%<minutes>02d:%<seconds>02d', hours: h, minutes: m, seconds: s)
 end
 
 entry_seconds = lambda do |entry|

@@ -125,7 +125,18 @@ Generated Ruby API is intentionally close to Qt API, but follows universal bridg
 - Ruby keyword-safe renaming is applied when needed: `next` -> `next_`.
 - Default C++ arguments are surfaced as optional Ruby arguments.
 - Internal runtime name collisions are renamed consistently:
-  - Example: Qt `handle(int)` -> Ruby `handle_at(int)` (because `handle` is reserved for object pointer access).
+  - Qt `handle(int)` is exposed as `handle_at(int)` because `handle` is used for native object pointer access.
+- Property convenience API is generated from Qt setters/getters when available:
+  - `setText(...)` -> `text=(...)`, `text`.
+- Runtime event/signal convenience methods are Ruby-layer helpers (not raw Qt method names):
+  - `on(event, &block)` / alias `on_event`
+  - `off(event = nil)` / alias `off_event`
+  - `connect(signal, &block)` / aliases `on_signal`, `slot`
+  - `disconnect(signal = nil)` / alias `off_signal`
+- Introspection helpers are Ruby-layer helpers:
+  - `q_inspect`, aliases `qt_inspect`, `to_h`
+- Top-level constant aliases are provided for convenience:
+  - `QApplication`, `QWidget`, `QLabel`, `QPushButton`, `QLineEdit`, `QVBoxLayout`, `QTableWidget`, `QTableWidgetItem`, `QScrollArea`
 - Methods with unsupported signatures are skipped by policy:
   - non-public, deprecated, operator/internal event hooks,
   - non-FFI-safe argument/return types.
