@@ -1,0 +1,383 @@
+# frozen_string_literal: true
+
+def unsupported_cpp_type?(type_name)
+  type_name.include?('<') || type_name.include?('>') || type_name.include?('[') || type_name.include?('(')
+end
+
+def map_cpp_pointer_arg_type(type_name, qt_class)
+  return nil unless type_name.end_with?('*')
+
+  base = type_name.sub(/\s*\*\z/, '').strip
+  if qt_class && !base.include?('::') && base.match?(/\A[A-Z]\w*\z/) && !base.start_with?('Q')
+    base = "#{qt_class}::#{base}"
+  end
+  { ffi: :pointer, cast: "#{base}*" }
+end
+
+def map_builtin_intlike_arg_type(type_name)
+  return { ffi: :int } if type_name == 'int'
+  return { ffi: :int, cast: 'bool' } if type_name == 'bool'
+
+  nil
+end
+
+def map_qualified_intlike_arg_type(type_name, qt_class, int_cast_types)
+  return nil unless qt_class && type_name.match?(/\A[A-Z]\w*\z/)
+
+  qualified = "#{qt_class}::#{type_name}"
+  return { ffi: :int, cast: qualified } if int_cast_types&.include?(qualified)
+
+  nil
+end
+
+def map_cpp_intlike_arg_type(type_name, qt_class, int_cast_types)
+  builtin = map_builtin_intlike_arg_type(type_name)
+  return builtin if builtin
+  return { ffi: :int, cast: type_name } if type_name.include?('::') && int_cast_types&.include?(type_name)
+
+  map_qualified_intlike_arg_type(type_name, qt_class, int_cast_types)
+end
+
+def map_cpp_arg_type(type_name, qt_class: nil, int_cast_types: nil)
+  raw = type_name.to_s.strip
+  return nil if raw.end_with?('&') && !raw.start_with?('const ')
+
+  type = raw
+  type = type.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
+  return nil if unsupported_cpp_type?(type)
+  return { ffi: :string, cast: :qstring } if type == 'QString'
+
+  map_cpp_pointer_arg_type(type, qt_class) || map_cpp_intlike_arg_type(type, qt_class, int_cast_types)
+end
+
+def normalized_cpp_type_name(type_name)
+  type = type_name.to_s.strip
+  type = type.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
+  type = type.sub(/\s*\*\z/, '*') if type.end_with?('*')
+  type
+end
+
+def map_cpp_return_type(type_name)
+  raw = type_name.to_s.strip
+  return nil if unsupported_cpp_type?(raw)
+  return nil if raw.start_with?('const ') && raw.end_with?('*')
+
+  type = raw.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
+  map_scalar_cpp_return_type(type) || map_pointer_cpp_return_type(type)
+end
+
+def map_scalar_cpp_return_type(type)
+  return { ffi_return: :void } if type == 'void'
+  return { ffi_return: :int } if %w[int bool].include?(type)
+  return { ffi_return: :string, return_cast: :qstring_to_utf8 } if type == 'QString'
+
+  nil
+end
+
+def map_pointer_cpp_return_type(type)
+  return { ffi_return: :pointer } if type.end_with?('*')
+
+  nil
+end
+
+def parse_method_param_nodes(method_decl)
+  Array(method_decl['inner']).select { |node| node['kind'] == 'ParmVarDecl' }
+end
+
+def parse_method_param(param, idx)
+  {
+    name: param['name'] || "arg#{idx + 1}",
+    type: param.dig('type', 'qualType').to_s,
+    has_default: !param['init'].nil?
+  }
+end
+
+def parse_method_params(method_decl)
+  params = parse_method_param_nodes(method_decl)
+  required_arg_count = params.count { |param| param['init'].nil? }
+  parsed_params = params.each_with_index.map { |param, idx| parse_method_param(param, idx) }
+  [parsed_params, required_arg_count]
+end
+
+def parse_method_signature(method_decl)
+  qual = method_decl.dig('type', 'qualType').to_s
+  md = qual.match(/\A(.+?)\s*\((.*)\)/)
+  return nil unless md
+
+  parsed_params, required_arg_count = parse_method_params(method_decl)
+  {
+    return_type: md[1].strip,
+    required_arg_count: required_arg_count,
+    params: parsed_params
+  }
+end
+
+def build_auto_method_args(parsed, entry, qt_class, int_cast_types)
+  arg_cast_overrides = Array(entry[:arg_casts])
+  parsed[:params].each_with_index.map do |param, idx|
+    cast_override = arg_cast_overrides[idx]
+    arg_info = map_cpp_arg_type(param[:type], qt_class: qt_class, int_cast_types: int_cast_types)
+    arg_info ||= { ffi: :int } if cast_override
+    return nil unless arg_info
+
+    arg_hash = { name: param[:name], ffi: arg_info[:ffi] }
+    cast = cast_override || arg_info[:cast]
+    arg_hash[:cast] = cast if cast
+    arg_hash
+  end
+end
+
+def build_auto_method_hash(entry, ret_info, args, parsed)
+  method = {
+    qt_name: entry[:qt_name],
+    ruby_name: ruby_public_method_name(entry[:qt_name], entry[:ruby_name]),
+    ffi_return: ret_info[:ffi_return],
+    args: args,
+    required_arg_count: parsed[:required_arg_count]
+  }
+  method[:return_cast] = ret_info[:return_cast] if ret_info[:return_cast]
+  method
+end
+
+def build_auto_method_from_decl(method_decl, entry, qt_class:, int_cast_types:)
+  parsed = parse_method_signature(method_decl)
+  return nil unless parsed
+
+  ret_info = map_cpp_return_type(parsed[:return_type])
+  return nil unless ret_info
+
+  args = build_auto_method_args(parsed, entry, qt_class, int_cast_types)
+  return nil unless args
+
+  build_auto_method_hash(entry, ret_info, args, parsed)
+end
+
+def valid_auto_exportable_identifier?(name)
+  return false if name.nil? || name.empty?
+  return false unless name.match?(/\A[A-Za-z_]\w*\z/)
+
+  true
+end
+
+def forbidden_auto_exportable_method_name?(name)
+  return true if name.start_with?('~')
+  return true if name.include?('operator')
+  return true if name.end_with?('Event')
+
+  forbidden_names = %w[
+    event eventFilter childEvent customEvent timerEvent connectNotify disconnectNotify d_func connect disconnect
+  ]
+  return true if forbidden_names.include?(name)
+
+  false
+end
+
+def auto_exportable_method_name?(name)
+  return false unless valid_auto_exportable_identifier?(name)
+  return false if forbidden_auto_exportable_method_name?(name)
+
+  true
+end
+
+def deprecated_method_decl?(decl)
+  Array(decl['inner']).any? { |node| node['kind'] == 'DeprecatedAttr' }
+end
+
+def method_names_cache_entry(ast, class_name)
+  @method_names_with_bases_cache ||= {}.compare_by_identity
+  per_ast = (@method_names_with_bases_cache[ast] ||= {})
+  [per_ast, class_name]
+end
+
+def invalid_method_name_scope?(class_name, visited)
+  class_name.nil? || class_name.empty? || visited[class_name]
+end
+
+def build_auto_method_candidate(decl, entry, qt_class, int_cast_types)
+  parsed = parse_method_signature(decl)
+  return nil unless parsed
+
+  method = build_auto_method_from_decl(decl, entry, qt_class: qt_class, int_cast_types: int_cast_types)
+  return nil unless method
+
+  {
+    method: method,
+    param_types: parsed[:params].map { |param| normalized_cpp_type_name(param[:type]) }
+  }
+end
+
+def auto_method_decl_candidate?(decl)
+  return false unless decl['__effective_access'] == 'public'
+  return false if deprecated_method_decl?(decl)
+  return false unless auto_exportable_method_name?(decl['name'])
+
+  true
+end
+
+def collect_method_names_with_bases(ast, class_name, visited = {})
+  cache, cache_key = method_names_cache_entry(ast, class_name)
+  cached = cache[cache_key]
+  return cached if cached
+  return [] if invalid_method_name_scope?(class_name, visited)
+
+  visited[class_name] = true
+  index = ast_class_index(ast)
+  own_names = index[:methods_by_class].fetch(class_name, {}).keys
+  base_names = collect_base_method_names_with_bases(ast, class_name, visited)
+
+  combined = (own_names + base_names).uniq
+  cache[cache_key] = combined
+  combined
+end
+
+def collect_base_method_names_with_bases(ast, class_name, visited)
+  collect_class_bases(ast, class_name).flat_map do |base|
+    collect_method_names_with_bases(ast, base, visited)
+  end
+end
+
+def resolve_auto_method_cache_key(qt_class, entry)
+  [
+    qt_class,
+    entry[:qt_name],
+    entry[:ruby_name],
+    entry[:param_count],
+    Array(entry[:param_types]).map { |type_name| normalized_cpp_type_name(type_name) },
+    Array(entry[:arg_casts])
+  ]
+end
+
+def build_auto_method_candidates(decls, entry, qt_class, int_cast_types)
+  decls.filter_map do |decl|
+    next unless auto_method_decl_candidate?(decl)
+
+    build_auto_method_candidate(decl, entry, qt_class, int_cast_types)
+  end
+end
+
+def filter_auto_method_candidates(candidates, entry)
+  filtered = candidates
+
+  if entry[:param_count]
+    filtered = filtered.select { |candidate| candidate[:method][:args].length == entry[:param_count] }
+  end
+
+  if entry[:param_types]
+    expected = entry[:param_types].map { |type_name| normalized_cpp_type_name(type_name) }
+    filtered = filtered.select { |candidate| candidate[:param_types] == expected }
+  end
+
+  filtered
+end
+
+def resolve_auto_method_entry(auto_entry)
+  auto_entry.is_a?(String) ? { qt_name: auto_entry } : auto_entry.dup
+end
+
+def resolve_auto_method_cached(cache, cache_key)
+  return [false, nil] unless cache.key?(cache_key)
+
+  [true, cache[cache_key]]
+end
+
+def resolve_auto_method_built_candidates(ast, qt_class, entry)
+  decls = collect_method_decls_with_bases(ast, qt_class, entry.fetch(:qt_name))
+  return nil if decls.empty?
+
+  int_cast_types = ast_int_cast_type_set(ast)
+  built = build_auto_method_candidates(decls, entry, qt_class, int_cast_types)
+  return nil if built.empty?
+
+  built = filter_auto_method_candidates(built, entry)
+  return nil if built.empty?
+
+  built
+end
+
+def resolve_auto_method(ast, qt_class, auto_entry)
+  @resolve_auto_method_cache ||= {}.compare_by_identity
+  entry = resolve_auto_method_entry(auto_entry)
+  per_ast_cache = (@resolve_auto_method_cache[ast] ||= {})
+  cache_key = resolve_auto_method_cache_key(qt_class, entry)
+  cache_hit, cached = resolve_auto_method_cached(per_ast_cache, cache_key)
+  return cached if cache_hit
+
+  built = resolve_auto_method_built_candidates(ast, qt_class, entry)
+  return per_ast_cache[cache_key] = nil unless built
+
+  per_ast_cache[cache_key] = built.min_by { |candidate| candidate[:method][:args].length }[:method]
+end
+
+def auto_entries_for_spec(spec, ast)
+  auto_mode = spec[:auto_methods]
+  return Array(auto_mode) unless auto_mode == :all
+
+  names = collect_method_names_with_bases(ast, spec[:qt_class]).select { |name| auto_exportable_method_name?(name) }
+  rules = spec.fetch(:auto_method_rules, {})
+  names.sort.map do |name|
+    rule = rules[name.to_sym] || rules[name]
+    rule ? { qt_name: name }.merge(rule) : { qt_name: name }
+  end
+end
+
+def resolve_auto_methods_for_spec(ast, spec, auto_entries, manual_methods, auto_mode)
+  existing_names = manual_methods.to_set { |method| method[:qt_name] }
+  resolve_method = ->(entry) { resolve_auto_method(ast, spec[:qt_class], entry) }
+  resolver = AutoMethodSpecResolver.new(
+    spec: spec, auto_mode: auto_mode, existing_names: existing_names, resolve_method: resolve_method
+  )
+  spec_resolved = 0
+  spec_skipped = 0
+
+  auto_methods = auto_entries.filter_map do |entry|
+    method, spec_skipped, spec_resolved = resolver.resolve(entry, skipped: spec_skipped, resolved: spec_resolved)
+    next if method.nil?
+
+    method
+  end
+
+  [auto_methods, spec_resolved, spec_skipped]
+end
+
+def expand_auto_methods(specs, ast)
+  totals = { candidates: 0, resolved: 0, skipped: 0 }
+
+  expanded_specs = specs.map do |spec|
+    expand_auto_methods_for_spec(spec, ast, totals)
+  end
+  debug_log("auto totals candidates=#{totals[:candidates]} resolved=#{totals[:resolved]} skipped=#{totals[:skipped]}")
+  expanded_specs
+end
+
+def expand_auto_methods_for_spec(spec, ast, totals)
+  spec_start = monotonic_now
+  auto_mode = spec[:auto_methods]
+  auto_entries = auto_entries_for_spec(spec, ast)
+  manual_methods = Array(spec[:methods])
+  return spec if auto_entries.empty?
+
+  spec_candidates = auto_entries.length
+  auto_methods, spec_resolved, spec_skipped = resolve_auto_methods_for_spec(
+    ast, spec, auto_entries, manual_methods, auto_mode
+  )
+  update_auto_method_totals!(totals, spec_candidates, spec_resolved, spec_skipped)
+  log_auto_method_expansion(spec, auto_mode, spec_candidates, spec_resolved, spec_skipped, spec_start)
+
+  spec.merge(methods: manual_methods + auto_methods)
+end
+
+def update_auto_method_totals!(totals, spec_candidates, spec_resolved, spec_skipped)
+  totals[:candidates] += spec_candidates
+  totals[:resolved] += spec_resolved
+  totals[:skipped] += spec_skipped
+end
+
+def log_auto_method_expansion(spec, auto_mode, spec_candidates, spec_resolved, spec_skipped, spec_start)
+  elapsed = monotonic_now - spec_start
+  message = "auto #{spec[:qt_class]} mode=#{auto_mode || :list} " \
+            "candidates=#{spec_candidates} resolved=#{spec_resolved} " \
+            "skipped=#{spec_skipped} #{format('%.3fs', elapsed)}"
+  debug_log(
+    message
+  )
+end
