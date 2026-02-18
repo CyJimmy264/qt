@@ -286,8 +286,6 @@ end
 
 def cpp_null_handle_return(method)
   case method[:ffi_return]
-  when :void
-    '    return;'
   when :int
     '    return -1;'
   when :pointer, :string
@@ -336,7 +334,7 @@ def generate_cpp_bridge(specs)
   end
 
   generate_cpp_delete(lines)
-  lines.join("\n") + "\n"
+  "#{lines.join("\n")}\n"
 end
 
 def append_block(lines, block)
@@ -403,7 +401,7 @@ def generate_bridge_api(specs)
   lines = bridge_api_prelude_lines
   append_bridge_api_function_lines(lines, specs)
   lines.concat(bridge_api_closure_lines)
-  lines.join("\n") + "\n"
+  "#{lines.join("\n")}\n"
 end
 
 def bridge_api_prelude_lines
@@ -696,7 +694,7 @@ def generate_ruby_widgets(specs, super_qt_by_qt, wrapper_qt_classes)
   append_ruby_widgets_classes(lines, specs, super_qt_by_qt, wrapper_qt_classes)
 
   lines << 'end'
-  lines.join("\n") + "\n"
+  "#{lines.join("\n")}\n"
 end
 
 total_start = monotonic_now

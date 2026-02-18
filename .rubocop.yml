@@ -19,3 +19,10 @@ AllCops:
 
 Layout/LineLength:
   Max: 120
+
+Naming/PredicateMethod:
+  AllowedMethods:
+    - on_event
+    - on_signal
+    - off_event
+    - off_signal

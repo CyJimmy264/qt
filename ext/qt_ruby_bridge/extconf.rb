@@ -62,8 +62,11 @@ unless File.exist?(local_runtime_hpp) && File.identical?(runtime_hpp, local_runt
   FileUtils.cp(runtime_hpp, local_runtime_hpp)
 end
 
+# mkmf uses these global variables for compiler/linker/source configuration.
+# rubocop:disable Style/GlobalVars
 $CXXFLAGS = "#{$CXXFLAGS} #{cflags} -std=c++17"
 $LDFLAGS = "#{$LDFLAGS} #{libs}"
 $srcs = ['qt_ruby_bridge.cpp', *runtime_cpp_files.map { |f| File.basename(f) }]
+# rubocop:enable Style/GlobalVars
 
 create_makefile('qt/qt_ruby_bridge')

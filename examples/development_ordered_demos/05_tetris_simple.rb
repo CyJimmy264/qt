@@ -118,8 +118,8 @@ valid_position = lambda do |piece, dx, dy, shape = nil|
   test.all? do |x, y|
     nx = piece[:x] + x + dx
     ny = piece[:y] + y + dy
-    next false if nx < 0 || nx >= COLS || ny >= ROWS
-    next true if ny < 0
+    next false if nx.negative? || nx >= COLS || ny >= ROWS
+    next true if ny.negative?
 
     board[ny][nx] == -1
   end
@@ -139,7 +139,7 @@ lock_piece = lambda do |piece|
   piece[:shape].each do |x, y|
     bx = piece[:x] + x
     by = piece[:y] + y
-    next if by < 0
+    next if by.negative?
 
     board[by][bx] = piece[:color]
   end
@@ -152,7 +152,7 @@ clear_lines = lambda do
 
   ROWS.times { |r| board[r] = kept[r] }
 
-  if removed > 0
+  if removed.positive?
     lines += removed
     score += case removed
              when 1 then 100
@@ -190,7 +190,7 @@ paint = lambda do
     current[:shape].each do |x, y|
       bx = current[:x] + x
       by = current[:y] + y
-      next if by < 0 || bx < 0 || bx >= COLS || by >= ROWS
+      next if by.negative? || bx.negative? || bx >= COLS || by >= ROWS
 
       board_cells[by][bx].set_style_sheet(PIECE_STYLES[current[:color]])
     end

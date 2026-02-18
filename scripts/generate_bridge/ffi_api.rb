@@ -6,11 +6,11 @@ def free_functions
     { name: 'qt_ruby_qapplication_process_events', ffi_return: :void, args: [] },
     { name: 'qt_ruby_qapplication_top_level_widgets_count', ffi_return: :int, args: [] },
     { name: 'qt_ruby_set_event_callback', ffi_return: :void, args: [:pointer] },
-    { name: 'qt_ruby_watch_qobject_event', ffi_return: :void, args: [:pointer, :int] },
-    { name: 'qt_ruby_unwatch_qobject_event', ffi_return: :void, args: [:pointer, :int] },
+    { name: 'qt_ruby_watch_qobject_event', ffi_return: :void, args: %i[pointer int] },
+    { name: 'qt_ruby_unwatch_qobject_event', ffi_return: :void, args: %i[pointer int] },
     { name: 'qt_ruby_set_signal_callback', ffi_return: :void, args: [:pointer] },
-    { name: 'qt_ruby_qobject_connect_signal', ffi_return: :int, args: [:pointer, :string] },
-    { name: 'qt_ruby_qobject_disconnect_signal', ffi_return: :int, args: [:pointer, :string] }
+    { name: 'qt_ruby_qobject_connect_signal', ffi_return: :int, args: %i[pointer string] },
+    { name: 'qt_ruby_qobject_disconnect_signal', ffi_return: :int, args: %i[pointer string] }
   ]
 end
 

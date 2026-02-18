@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
   spec.description   = 'Qt GUI bindings for Ruby with generated bridge code from system Qt headers.'
   spec.homepage      = 'https://example.com/qt'
   spec.license       = 'MIT'
-  spec.required_ruby_version = '>= 3.1'
+  spec.required_ruby_version = '>= 3.4'
 
   spec.files = Dir[
     'lib/**/*.rb',
