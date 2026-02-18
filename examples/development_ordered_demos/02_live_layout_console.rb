@@ -108,6 +108,7 @@ ensure
   jobs << :__exit__
 end
 
+# TODO: Replace manual process_events polling with app.exec + QTimer-driven integration.
 while running
   loop do
     job = jobs.pop(true)

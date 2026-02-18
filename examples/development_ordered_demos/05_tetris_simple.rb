@@ -264,6 +264,7 @@ window.on(:key_press) { |ev| handle_key_event.call(ev) }
 restart.call
 window.show
 
+# TODO: Replace manual game loop polling with app.exec + QTimer tick/update.
 loop do
   QApplication.process_events
   break if window.is_visible.zero?

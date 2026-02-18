@@ -206,6 +206,7 @@ window.on(:resize) { |_ev| layout_ui.call }
 window.show
 QApplication.process_events
 
+# TODO: Replace manual process_events loop with app.exec + QTimer.
 loop do
   QApplication.process_events
   break if window.is_visible.zero?

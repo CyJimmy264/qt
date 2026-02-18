@@ -650,6 +650,7 @@ QApplication.process_events
 
 last_tick = Time.now
 
+# TODO: Replace manual process_events loop with app.exec + QTimer updates.
 loop do
   QApplication.process_events
   break if window.is_visible.zero?

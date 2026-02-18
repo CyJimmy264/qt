@@ -137,6 +137,7 @@ window.on(:mouse_move) do |evt|
   end
 end
 
+# TODO: Replace manual process_events loop with app.exec + QTimer.
 while window.is_visible != 0
   QApplication.process_events
   sleep(0.005)

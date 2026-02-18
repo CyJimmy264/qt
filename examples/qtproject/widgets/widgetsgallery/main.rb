@@ -171,6 +171,7 @@ apply_theme.call
 window.show
 QApplication.process_events
 
+# TODO: Replace manual process_events loop with app.exec + QTimer.
 while window.is_visible != 0
   QApplication.process_events
   sleep(0.01)
