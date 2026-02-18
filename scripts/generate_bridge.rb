@@ -263,6 +263,42 @@ def collect_class_api(ast, class_name)
   { methods: methods, constructors: ctors }
 end
 
+def ast_record_base_classes(node, class_name, bases_by_class)
+  Array(node['bases']).each do |base|
+    type_info = base['type'] || {}
+    raw = type_info['desugaredQualType'] || type_info['qualType']
+    parsed_base = normalize_cpp_type_name(raw)
+    bases_by_class[class_name] << parsed_base if parsed_base && !parsed_base.empty?
+  end
+end
+
+def ast_record_class_members(node, class_name, methods_by_class, ctors_by_class, ctor_decls_by_class)
+  current_access = node['tagUsed'] == 'struct' ? 'public' : 'private'
+  method_decl_count = 0
+  ctor_decl_count = 0
+
+  Array(node['inner']).each do |inner|
+    case inner['kind']
+    when 'AccessSpecDecl'
+      current_access = inner['access'] if inner['access']
+    when 'CXXMethodDecl'
+      next unless inner['name']
+
+      access = inner['access'] || current_access
+      methods_by_class[class_name][inner['name']] << inner.merge('__effective_access' => access)
+      method_decl_count += 1
+    when 'CXXConstructorDecl'
+      next unless inner['name']
+
+      ctors_by_class[class_name] << inner['name']
+      ctor_decls_by_class[class_name] << inner.merge('__effective_access' => current_access)
+      ctor_decl_count += 1
+    end
+  end
+
+  [method_decl_count, ctor_decl_count]
+end
+
 def ast_class_index(ast)
   @ast_class_index_cache ||= {}
   cached = @ast_class_index_cache[ast.object_id]
@@ -284,32 +320,12 @@ def ast_class_index(ast)
       next if class_name.nil? || class_name.empty?
       abstract_by_class[class_name] ||= node.dig('definitionData', 'isAbstract') == true
 
-      Array(node['bases']).each do |base|
-        type_info = base['type'] || {}
-        raw = type_info['desugaredQualType'] || type_info['qualType']
-        parsed_base = normalize_cpp_type_name(raw)
-        bases_by_class[class_name] << parsed_base if parsed_base && !parsed_base.empty?
-      end
-
-      current_access = node['tagUsed'] == 'struct' ? 'public' : 'private'
-      Array(node['inner']).each do |inner|
-        case inner['kind']
-        when 'AccessSpecDecl'
-          current_access = inner['access'] if inner['access']
-        when 'CXXMethodDecl'
-          next unless inner['name']
-
-          access = inner['access'] || current_access
-          methods_by_class[class_name][inner['name']] << inner.merge('__effective_access' => access)
-          method_decl_count += 1
-        when 'CXXConstructorDecl'
-          next unless inner['name']
-
-          ctors_by_class[class_name] << inner['name']
-          ctor_decls_by_class[class_name] << inner.merge('__effective_access' => current_access)
-          ctor_decl_count += 1
-        end
-      end
+      ast_record_base_classes(node, class_name, bases_by_class)
+      method_count, ctor_count = ast_record_class_members(
+        node, class_name, methods_by_class, ctors_by_class, ctor_decls_by_class
+      )
+      method_decl_count += method_count
+      ctor_decl_count += ctor_count
     end
   end
 
