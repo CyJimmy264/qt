@@ -153,15 +153,11 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
       QApplication.process_events
       window.set_geometry(20, 30, 400, 260)
 
-      20.times do
-        QApplication.process_events
-        break unless payloads.empty?
-        sleep(0.005)
-      end
+      wait_for_non_empty_payloads(payloads)
 
       skip 'resize event was not delivered in this Qt platform environment' if payloads.empty?
 
-      ev = payloads.find { |payload| payload[:type] == Qt::EventResize && payload[:a] == 400 && payload[:b] == 260 }
+      ev = find_resize_payload(payloads, 400, 260)
       skip 'resize to target geometry was not observed in this Qt platform environment' unless ev
     end
   end
@@ -193,6 +189,18 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
   end
 
   private
+
+  def wait_for_non_empty_payloads(payloads)
+    20.times do
+      QApplication.process_events
+      break unless payloads.empty?
+      sleep(0.005)
+    end
+  end
+
+  def find_resize_payload(payloads, width, height)
+    payloads.find { |payload| payload[:type] == Qt::EventResize && payload[:a] == width && payload[:b] == height }
+  end
 
   def assert_payload_forwarding(event_type, values)
     ptr = FFI::Pointer.new(0x1234)

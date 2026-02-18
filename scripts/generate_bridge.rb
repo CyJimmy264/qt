@@ -449,20 +449,25 @@ def map_cpp_return_type(type_name)
   nil
 end
 
+def parse_method_params(method_decl)
+  params = Array(method_decl['inner']).select { |node| node['kind'] == 'ParmVarDecl' }
+  required_arg_count = params.count { |param| param['init'].nil? }
+  parsed_params = params.each_with_index.map do |param, idx|
+    { name: (param['name'] || "arg#{idx + 1}"), type: param.dig('type', 'qualType').to_s, has_default: !param['init'].nil? }
+  end
+  [parsed_params, required_arg_count]
+end
+
 def parse_method_signature(method_decl)
   qual = method_decl.dig('type', 'qualType').to_s
   md = qual.match(/\A(.+?)\s*\((.*)\)/)
   return nil unless md
 
-  ret = md[1].strip
-  params = Array(method_decl['inner']).select { |x| x['kind'] == 'ParmVarDecl' }
-  required_arg_count = params.count { |param| param['init'].nil? }
+  parsed_params, required_arg_count = parse_method_params(method_decl)
   {
-    return_type: ret,
+    return_type: md[1].strip,
     required_arg_count: required_arg_count,
-    params: params.each_with_index.map do |param, idx|
-      { name: (param['name'] || "arg#{idx + 1}"), type: param.dig('type', 'qualType').to_s, has_default: !param['init'].nil? }
-    end
+    params: parsed_params
   }
 end
 
@@ -684,13 +689,21 @@ def expand_auto_methods_for_spec(spec, ast, totals)
 
   spec_candidates = auto_entries.length
   auto_methods, spec_resolved, spec_skipped = resolve_auto_methods_for_spec(ast, spec, auto_entries, manual_methods, auto_mode)
+  update_auto_method_totals!(totals, spec_candidates, spec_resolved, spec_skipped)
+  log_auto_method_expansion(spec, auto_mode, spec_candidates, spec_resolved, spec_skipped, spec_start)
+
+  spec.merge(methods: manual_methods + auto_methods)
+end
+
+def update_auto_method_totals!(totals, spec_candidates, spec_resolved, spec_skipped)
   totals[:candidates] += spec_candidates
   totals[:resolved] += spec_resolved
   totals[:skipped] += spec_skipped
+end
+
+def log_auto_method_expansion(spec, auto_mode, spec_candidates, spec_resolved, spec_skipped, spec_start)
   elapsed = monotonic_now - spec_start
   debug_log("auto #{spec[:qt_class]} mode=#{auto_mode || :list} candidates=#{spec_candidates} resolved=#{spec_resolved} skipped=#{spec_skipped} #{format('%.3fs', elapsed)}")
-
-  spec.merge(methods: manual_methods + auto_methods)
 end
 
 def normalize_cpp_type_name(raw)
@@ -946,20 +959,22 @@ def enrich_specs_with_properties(specs, ast)
   end
 end
 
+def validate_spec_api(errors, spec, api)
+  req = spec[:validate]
+  req[:constructors].each do |ctor|
+    errors << "#{spec[:qt_class]}: constructor #{ctor} not found" unless api[:constructors].include?(ctor)
+  end
+  req[:methods].each do |method|
+    errors << "#{spec[:qt_class]}: method #{method} not found" unless api[:methods].include?(method)
+  end
+end
+
 def validate_qt_api!(ast, specs)
   errors = []
 
   specs.each do |spec|
-    req = spec[:validate]
     api = collect_class_api(ast, spec[:qt_class])
-
-    req[:constructors].each do |ctor|
-      errors << "#{spec[:qt_class]}: constructor #{ctor} not found" unless api[:constructors].include?(ctor)
-    end
-
-    req[:methods].each do |method|
-      errors << "#{spec[:qt_class]}: method #{method} not found" unless api[:methods].include?(method)
-    end
+    validate_spec_api(errors, spec, api)
   end
 
   return if errors.empty?
@@ -1065,6 +1080,11 @@ def emit_cpp_method_return(lines, method, invocation)
   lines << "  return #{invocation};"
 end
 
+def cpp_method_invocation(method)
+  call_args = method[:args].map { |arg| arg_expr(arg) }.join(', ')
+  "self_obj->#{method[:qt_name]}(#{call_args})"
+end
+
 def generate_cpp_method(lines, spec, method)
   fn = method_function_name(spec, method)
   ret = ffi_return_to_cpp(method[:ffi_return])
@@ -1076,10 +1096,7 @@ def generate_cpp_method(lines, spec, method)
   lines << '  }'
   lines << ''
   lines << "  auto* self_obj = static_cast<#{spec[:qt_class]}*>(handle);"
-
-  call_args = method[:args].map { |arg| arg_expr(arg) }.join(', ')
-  invocation = "self_obj->#{method[:qt_name]}(#{call_args})"
-  emit_cpp_method_return(lines, method, invocation)
+  emit_cpp_method_return(lines, method, cpp_method_invocation(method))
   lines << '}'
 end
 
@@ -1252,26 +1269,38 @@ end
 
 def append_widget_initializer(lines, spec:, widget_root:, indent:)
   if spec[:constructor][:parent]
-    lines << "#{indent}def initialize(parent = nil)"
-    lines << "#{indent}  @handle = Native.#{spec[:prefix]}_new(parent&.handle)"
-    lines << "#{indent}  init_children_tracking!" if widget_root
-    if spec[:ruby_class] == 'QWidget'
-      lines << "#{indent}  if parent"
-      lines << "#{indent}    parent.add_child(self)"
-      lines << "#{indent}  else"
-      lines << "#{indent}    app = QApplication.current"
-      lines << "#{indent}    app&.register_window(self)"
-      lines << "#{indent}  end"
-    elsif spec[:constructor][:register_in_parent]
-      lines << "#{indent}  parent.add_child(self) if parent&.respond_to?(:add_child)"
-    end
+    append_parent_widget_initializer(lines, spec, widget_root, indent)
   else
-    lines << "#{indent}def initialize(_argc = 0, _argv = [])"
-    lines << "#{indent}  @handle = Native.#{spec[:prefix]}_new"
+    append_default_widget_initializer(lines, spec, indent)
   end
 
   lines << "#{indent}  yield self if block_given?"
   lines << "#{indent}end"
+end
+
+def append_parent_widget_initializer(lines, spec, widget_root, indent)
+  lines << "#{indent}def initialize(parent = nil)"
+  lines << "#{indent}  @handle = Native.#{spec[:prefix]}_new(parent&.handle)"
+  lines << "#{indent}  init_children_tracking!" if widget_root
+  append_parent_registration_logic(lines, spec, indent)
+end
+
+def append_default_widget_initializer(lines, spec, indent)
+  lines << "#{indent}def initialize(_argc = 0, _argv = [])"
+  lines << "#{indent}  @handle = Native.#{spec[:prefix]}_new"
+end
+
+def append_parent_registration_logic(lines, spec, indent)
+  if spec[:ruby_class] == 'QWidget'
+    lines << "#{indent}  if parent"
+    lines << "#{indent}    parent.add_child(self)"
+    lines << "#{indent}  else"
+    lines << "#{indent}    app = QApplication.current"
+    lines << "#{indent}    app&.register_window(self)"
+    lines << "#{indent}  end"
+  elsif spec[:constructor][:register_in_parent]
+    lines << "#{indent}  parent.add_child(self) if parent&.respond_to?(:add_child)"
+  end
 end
 
 def append_ruby_qapplication_prelude(lines, spec, metadata)
@@ -1358,14 +1387,9 @@ def append_ruby_widget_methods(lines, spec)
 end
 
 def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_ruby)
-  inherited_methods = inherited_methods_for_spec(spec, specs_by_qt, super_qt_by_qt)
-  all_methods = (inherited_methods + spec[:methods]).uniq { |m| m[:qt_name] }
-  metadata = ruby_api_metadata(all_methods)
-
-  super_qt = super_qt_by_qt[spec[:qt_class]]
-  super_ruby = super_qt ? qt_to_ruby[super_qt] : nil
+  metadata = ruby_api_metadata_for_spec(spec, specs_by_qt, super_qt_by_qt)
+  super_ruby = ruby_super_class_for_spec(spec, super_qt_by_qt, qt_to_ruby)
   widget_root = spec[:ruby_class] == 'QWidget'
-  widget_based = spec[:qt_class] != 'QWidget' && widget_based_qt_class?(spec[:qt_class], super_qt_by_qt)
 
   generate_ruby_widget_class_header(lines, spec, metadata: metadata, super_ruby: super_ruby, widget_root: widget_root)
   append_widget_initializer(lines, spec: spec, widget_root: widget_root, indent: '    ')
@@ -1374,6 +1398,17 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
 
   lines << '  end'
   lines << ''
+end
+
+def ruby_api_metadata_for_spec(spec, specs_by_qt, super_qt_by_qt)
+  inherited_methods = inherited_methods_for_spec(spec, specs_by_qt, super_qt_by_qt)
+  all_methods = (inherited_methods + spec[:methods]).uniq { |method| method[:qt_name] }
+  ruby_api_metadata(all_methods)
+end
+
+def ruby_super_class_for_spec(spec, super_qt_by_qt, qt_to_ruby)
+  super_qt = super_qt_by_qt[spec[:qt_class]]
+  super_qt ? qt_to_ruby[super_qt] : nil
 end
 
 def build_qt_to_ruby_map(specs, wrapper_qt_classes)
