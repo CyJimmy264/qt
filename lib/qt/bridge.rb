@@ -4,6 +4,7 @@ require 'ffi'
 require 'rbconfig'
 
 module Qt
+  # Bridge helpers for registering and disposing wrapped native objects.
   module Bridge
     extend FFI::Library
 

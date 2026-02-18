@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 module Qt
+  # Tracks QApplication creation/disposal lifecycle from Ruby side.
   module ApplicationLifecycle
     def initialize(_argc = 0, _argv = [])
       @windows = []

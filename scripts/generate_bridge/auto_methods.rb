@@ -330,22 +330,30 @@ def auto_entries_for_spec(spec, ast)
 end
 
 def resolve_auto_methods_for_spec(ast, spec, auto_entries, manual_methods, auto_mode)
-  existing_names = manual_methods.to_set { |method| method[:qt_name] }
-  resolve_method = ->(entry) { resolve_auto_method(ast, spec[:qt_class], entry) }
-  resolver = AutoMethodSpecResolver.new(
-    spec: spec, auto_mode: auto_mode, existing_names: existing_names, resolve_method: resolve_method
-  )
+  resolver = build_auto_method_resolver(ast, spec, manual_methods, auto_mode)
   spec_resolved = 0
   spec_skipped = 0
-
   auto_methods = auto_entries.filter_map do |entry|
-    method, spec_skipped, spec_resolved = resolver.resolve(entry, skipped: spec_skipped, resolved: spec_resolved)
-    next if method.nil?
-
+    method, spec_skipped, spec_resolved = resolve_with_resolver(resolver, entry, spec_skipped, spec_resolved)
     method
   end
 
   [auto_methods, spec_resolved, spec_skipped]
+end
+
+def build_auto_method_resolver(ast, spec, manual_methods, auto_mode)
+  existing_names = manual_methods.to_set { |method| method[:qt_name] }
+  resolve_method = ->(entry) { resolve_auto_method(ast, spec[:qt_class], entry) }
+  AutoMethodSpecResolver.new(
+    spec: spec,
+    auto_mode: auto_mode,
+    existing_names: existing_names,
+    resolve_method: resolve_method
+  )
+end
+
+def resolve_with_resolver(resolver, entry, spec_skipped, spec_resolved)
+  resolver.resolve(entry, skipped: spec_skipped, resolved: spec_resolved)
 end
 
 def expand_auto_methods(specs, ast)
@@ -365,21 +373,29 @@ def expand_auto_methods_for_spec(spec, ast, totals)
   manual_methods = Array(spec[:methods])
   return spec if auto_entries.empty?
 
-  spec_candidates = auto_entries.length
+  auto_result = resolve_spec_auto_methods(ast, spec, auto_entries, manual_methods, auto_mode)
+  apply_auto_method_result!(totals, spec, auto_mode, spec_start, auto_result)
+  spec.merge(methods: manual_methods + auto_result[:methods])
+end
+
+def resolve_spec_auto_methods(ast, spec, auto_entries, manual_methods, auto_mode)
   auto_methods, spec_resolved, spec_skipped = resolve_auto_methods_for_spec(
     ast, spec, auto_entries, manual_methods, auto_mode
   )
-  update_auto_method_totals!(totals, spec_candidates, spec_resolved, spec_skipped)
-  counts = { candidates: spec_candidates, resolved: spec_resolved, skipped: spec_skipped }
-  log_auto_method_expansion(spec: spec, auto_mode: auto_mode, counts: counts, spec_start: spec_start)
-
-  spec.merge(methods: manual_methods + auto_methods)
+  { methods: auto_methods, candidates: auto_entries.length, resolved: spec_resolved, skipped: spec_skipped }
 end
 
 def update_auto_method_totals!(totals, spec_candidates, spec_resolved, spec_skipped)
   totals[:candidates] += spec_candidates
   totals[:resolved] += spec_resolved
   totals[:skipped] += spec_skipped
+end
+
+def apply_auto_method_result!(totals, spec, auto_mode, spec_start, auto_result)
+  update_auto_method_totals!(
+    totals, auto_result[:candidates], auto_result[:resolved], auto_result[:skipped]
+  )
+  log_auto_method_expansion(spec: spec, auto_mode: auto_mode, counts: auto_result, spec_start: spec_start)
 end
 
 def log_auto_method_expansion(spec:, auto_mode:, counts:, spec_start:)

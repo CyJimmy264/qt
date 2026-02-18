@@ -62,9 +62,7 @@ def trace_generated_super_chain(fetch_bases, known_qt, qt_class, super_qt_by_qt)
   return if qt_class == 'QApplication'
 
   visited = {}
-  prev = qt_class
-  cur = qt_class
-
+  prev = cur = qt_class
   loop do
     base = next_trace_base(fetch_bases, cur, visited)
     break unless base
@@ -664,17 +662,20 @@ def emit_qt_classes(lines, qts_to_emit, specs_by_qt, super_qt_by_qt, qt_to_ruby)
 
     super_qt = super_qt_by_qt[qt_class]
     emit_qt.call(super_qt) if super_qt && qts_to_emit.include?(super_qt)
-
-    spec = specs_by_qt[qt_class]
-    if spec
-      generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_ruby)
-    else
-      generate_ruby_wrapper_class(lines, qt_class, super_qt ? qt_to_ruby[super_qt] : nil)
-    end
-
+    emit_qt_class_definition(lines, qt_class, specs_by_qt, super_qt_by_qt, qt_to_ruby)
     emitted[qt_class] = true
   end
   qts_to_emit.sort.each { |qt_class| emit_qt.call(qt_class) }
+end
+
+def emit_qt_class_definition(lines, qt_class, specs_by_qt, super_qt_by_qt, qt_to_ruby)
+  spec = specs_by_qt[qt_class]
+  if spec
+    generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_ruby)
+  else
+    super_qt = super_qt_by_qt[qt_class]
+    generate_ruby_wrapper_class(lines, qt_class, super_qt ? qt_to_ruby[super_qt] : nil)
+  end
 end
 
 def ruby_widgets_prelude_lines

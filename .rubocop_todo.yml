@@ -10,22 +10,12 @@
 # Configuration parameters: CountComments, CountAsOne, AllowedMethods, AllowedPatterns.
 # AllowedMethods: refine
 Metrics/BlockLength:
-  Max: 139
+  Max: 136
 
 # Offense count: 41
 # Configuration parameters: CountComments, CountAsOne, AllowedMethods, AllowedPatterns.
 Metrics/MethodLength:
-  Max: 15
-
-# Offense count: 1
-# Configuration parameters: CountComments, CountAsOne.
-Metrics/ModuleLength:
-  Max: 108
-
-# Offense count: 1
-# Configuration parameters: CountKeywordArgs, MaxOptionalParameters.
-Metrics/ParameterLists:
-  Max: 5
+  Max: 12
 
 # Offense count: 25
 # This cop supports safe autocorrection (--autocorrect).
@@ -41,10 +31,3 @@ Style/Documentation:
   Exclude:
     - 'spec/**/*'
     - 'test/**/*'
-    - 'lib/qt.rb'
-    - 'lib/qt/application_lifecycle.rb'
-    - 'lib/qt/bridge.rb'
-    - 'lib/qt/children_tracking.rb'
-    - 'lib/qt/event_runtime.rb'
-    - 'lib/qt/inspectable.rb'
-    - 'lib/qt/native.rb'

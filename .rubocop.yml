@@ -20,6 +20,27 @@ AllCops:
 Layout/LineLength:
   Max: 120
 
+Metrics/BlockLength:
+  CountAsOne:
+    - array
+    - hash
+    - heredoc
+    - method_call
+
+Metrics/MethodLength:
+  CountAsOne:
+    - array
+    - hash
+    - heredoc
+    - method_call
+
+Metrics/ModuleLength:
+  CountAsOne:
+    - array
+    - hash
+    - heredoc
+    - method_call
+
 Naming/PredicateMethod:
   AllowedMethods:
     - on_event

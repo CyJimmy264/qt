@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 module Qt
+  # Thin FFI access layer for generated bridge entry points.
   module Native
     require 'ffi'
 

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 module Qt
+  # Common object inspection formatting for Qt wrapper instances.
   module Inspectable
     def q_inspect_property_values
       property_values = {}

@@ -60,7 +60,10 @@ def build_base_spec_for_qt_class(ast, qt_class)
   supports_parent = ctor_decls.any? { |decl| constructor_supports_parent_only?(decl) }
   widget_child = qt_class != 'QWidget' && class_inherits?(ast, qt_class, 'QWidget')
   parent_ctor = supports_parent ? parent_constructor_for_widget(widget_child) : { parent: false }
+  base_spec_hash(qt_class, parent_ctor)
+end
 
+def base_spec_hash(qt_class, parent_ctor)
   {
     qt_class: qt_class,
     ruby_class: qt_class,

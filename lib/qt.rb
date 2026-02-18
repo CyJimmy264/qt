@@ -26,6 +26,7 @@ require_relative 'qt/event_runtime_widget_methods'
 require_relative 'qt/event_runtime'
 require GENERATED_WIDGETS
 
+# Root namespace for all Qt Ruby bindings.
 module Qt
 end
 

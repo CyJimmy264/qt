@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
 module Qt
+  # Event/signal subscription runtime backed by generated native callbacks.
   module EventRuntime
     module_function
 
     def on_event(widget, event_name, &block)
       raise ArgumentError, 'pass block to on_event' unless block
 
-      Qt::Native.ensure_loaded!
-      Qt::Native.define_bridge_wrappers!
+      ensure_native_bridge_ready!
       ensure_event_callback!
 
       event_type = event_type_for(event_name)
@@ -27,8 +27,7 @@ module Qt
     def on_signal(widget, signal_name, &block)
       raise ArgumentError, 'pass block to on_signal' unless block
 
-      Qt::Native.ensure_loaded!
-      Qt::Native.define_bridge_wrappers!
+      ensure_native_bridge_ready!
       ensure_signal_callback!
 
       handle = widget_handle(widget)
@@ -56,14 +55,9 @@ module Qt
     end
 
     def off_signal(widget, signal_name = nil)
-      Qt::Native.ensure_loaded!
-      Qt::Native.define_bridge_wrappers!
-
-      handle = widget_handle(widget)
-      return false unless handle && @signal_handlers
-
-      per_widget = @signal_handlers[handle.address]
-      return false unless per_widget
+      ensure_native_bridge_ready!
+      return false unless (handle = widget_handle(widget)) && @signal_handlers
+      return false unless (per_widget = @signal_handlers[handle.address])
 
       if signal_name
         signal_key = signal_name.to_s
@@ -73,19 +67,13 @@ module Qt
         per_widget.clear
         Qt::Native.qobject_disconnect_signal(handle, nil)
       end
-
       true
     end
 
     def off_event(widget, event_name = nil)
-      Qt::Native.ensure_loaded!
-      Qt::Native.define_bridge_wrappers!
-
-      handle = widget_handle(widget)
-      return false unless handle && @event_handlers
-
-      per_widget = @event_handlers[handle.address]
-      return false unless per_widget
+      ensure_native_bridge_ready!
+      return false unless (handle = widget_handle(widget)) && @event_handlers
+      return false unless (per_widget = @event_handlers[handle.address])
 
       if event_name
         event_type = event_type_for(event_name)
@@ -95,7 +83,6 @@ module Qt
         per_widget.each_key { |event_type| Qt::Native.unwatch_qobject_event(handle, event_type) }
         @event_handlers.delete(handle.address)
       end
-
       true
     end
 
@@ -141,6 +128,11 @@ module Qt
       return nil if widget.nil?
 
       widget.respond_to?(:handle) ? widget.handle : widget
+    end
+
+    def ensure_native_bridge_ready!
+      Qt::Native.ensure_loaded!
+      Qt::Native.define_bridge_wrappers!
     end
   end
 end

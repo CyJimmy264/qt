@@ -147,16 +147,11 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
     with_qapplication do
       window = QWidget.new
       payloads = []
-
       window.on(:resize) { |ev| payloads << ev }
-      window.show
-      QApplication.process_events
+      show_and_process_events(window)
       window.set_geometry(20, 30, 400, 260)
-
       wait_for_non_empty_payloads(payloads)
-
       skip 'resize event was not delivered in this Qt platform environment' if payloads.empty?
-
       ev = find_resize_payload(payloads, 400, 260)
       skip 'resize to target geometry was not observed in this Qt platform environment' unless ev
     end
@@ -169,18 +164,12 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
       window = QWidget.new
       button = QPushButton.new(window)
       calls = []
-
       button.connect('clicked(bool)') { |payload| calls << payload }
       button.show
-      window.show
-      QApplication.process_events
-
+      show_and_process_events(window)
       button.click
       wait_for_non_empty_payloads(calls)
-
-      skip 'clicked(bool) signal was not delivered in this Qt platform environment' if calls.empty?
-
-      assert_operator calls.length, :>=, 1
+      verify_clicked_signal_delivered(calls)
     end
   end
 
@@ -197,6 +186,17 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
 
   def find_resize_payload(payloads, width, height)
     payloads.find { |payload| payload[:type] == Qt::EventResize && payload[:a] == width && payload[:b] == height }
+  end
+
+  def verify_clicked_signal_delivered(calls)
+    skip 'clicked(bool) signal was not delivered in this Qt platform environment' if calls.empty?
+
+    assert_operator calls.length, :>=, 1
+  end
+
+  def show_and_process_events(widget)
+    widget.show
+    QApplication.process_events
   end
 
   def assert_payload_forwarding(event_type, values)
