@@ -372,40 +372,43 @@ def collect_method_decls_with_bases(ast, class_name, method_name, visited = {})
   all
 end
 
+def unsupported_cpp_type?(type_name)
+  type_name.include?('<') || type_name.include?('>') || type_name.include?('[') || type_name.include?('(')
+end
+
+def map_cpp_pointer_arg_type(type_name, qt_class)
+  return nil unless type_name.end_with?('*')
+
+  base = type_name.sub(/\s*\*\z/, '').strip
+  if qt_class && !base.include?('::') && base.match?(/\A[A-Z]\w*\z/) && !base.start_with?('Q')
+    base = "#{qt_class}::#{base}"
+  end
+  { ffi: :pointer, cast: "#{base}*" }
+end
+
+def map_cpp_intlike_arg_type(type_name, qt_class, int_cast_types)
+  return { ffi: :int } if type_name == 'int'
+  return { ffi: :int, cast: 'bool' } if type_name == 'bool'
+  return { ffi: :int, cast: type_name } if type_name.include?('::') && int_cast_types&.include?(type_name)
+
+  return nil unless qt_class && type_name.match?(/\A[A-Z]\w*\z/)
+
+  qualified = "#{qt_class}::#{type_name}"
+  return { ffi: :int, cast: qualified } if int_cast_types&.include?(qualified)
+
+  nil
+end
+
 def map_cpp_arg_type(type_name, qt_class: nil, int_cast_types: nil)
   raw = type_name.to_s.strip
   return nil if raw.end_with?('&') && !raw.start_with?('const ')
 
   type = raw
   type = type.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
-  return nil if type.include?('<') || type.include?('>') || type.include?('[') || type.include?('(')
+  return nil if unsupported_cpp_type?(type)
+  return { ffi: :string, cast: :qstring } if type == 'QString'
 
-  if type == 'QString'
-    return { ffi: :string, cast: :qstring }
-  end
-
-  if type.end_with?('*')
-    base = type.sub(/\s*\*\z/, '').strip
-    base = "#{qt_class}::#{base}" if qt_class && !base.include?('::') && base.match?(/\A[A-Z]\w*\z/) && !base.start_with?('Q')
-    return { ffi: :pointer, cast: "#{base}*" }
-  end
-
-  case type
-  when 'int'
-    { ffi: :int }
-  when 'bool'
-    { ffi: :int, cast: 'bool' }
-  else
-    if type.include?('::') && int_cast_types&.include?(type)
-      return { ffi: :int, cast: type }
-    end
-    if qt_class && type.match?(/\A[A-Z]\w*\z/)
-      qualified = "#{qt_class}::#{type}"
-      return { ffi: :int, cast: qualified } if int_cast_types&.include?(qualified)
-    end
-
-    nil
-  end
+  map_cpp_pointer_arg_type(type, qt_class) || map_cpp_intlike_arg_type(type, qt_class, int_cast_types)
 end
 
 def normalized_cpp_type_name(type_name)
@@ -763,6 +766,29 @@ def class_has_method?(ast, class_name, method_name)
   collect_class_api(ast, class_name)[:methods].include?(method_name)
 end
 
+def trace_generated_super_chain(fetch_bases, known_qt, qt_class, super_qt_by_qt)
+  return if qt_class == 'QApplication'
+
+  visited = {}
+  prev = qt_class
+  cur = qt_class
+
+  loop do
+    bases = Array(fetch_bases.call(cur))
+    break if bases.empty?
+
+    base = bases.first
+    break if base.nil? || base.empty? || visited[base]
+
+    visited[base] = true
+    super_qt_by_qt[prev] ||= base
+    break if known_qt.include?(base)
+
+    prev = base
+    cur = base
+  end
+end
+
 def build_generated_inheritance(ast, specs)
   known_qt = specs.map { |s| s[:qt_class] }
   base_cache = {}
@@ -771,30 +797,7 @@ def build_generated_inheritance(ast, specs)
   end
 
   super_qt_by_qt = {}
-
-  known_qt.each do |qt_class|
-    next if qt_class == 'QApplication'
-
-    visited = {}
-    prev = qt_class
-    cur = qt_class
-
-    loop do
-      bases = Array(fetch_bases.call(cur))
-      break if bases.empty?
-
-      base = bases.first
-      break if base.nil? || base.empty? || visited[base]
-
-      visited[base] = true
-      super_qt_by_qt[prev] ||= base
-
-      break if known_qt.include?(base)
-
-      prev = base
-      cur = base
-    end
-  end
+  known_qt.each { |qt_class| trace_generated_super_chain(fetch_bases, known_qt, qt_class, super_qt_by_qt) }
 
   wrapper_qt_classes = (super_qt_by_qt.keys + super_qt_by_qt.values - known_qt).uniq
   [super_qt_by_qt, wrapper_qt_classes]
@@ -1140,30 +1143,38 @@ def append_ruby_class_api_constants(lines, qt_class:, metadata:, indent:)
   lines << "#{indent}QT_API_PROPERTIES = #{metadata[:properties].map(&:to_sym).inspect}.freeze"
 end
 
+def ruby_method_arguments(method, arg_map, required_arg_count)
+  method[:args].each_with_index.map do |arg, idx|
+    safe = arg_map[arg[:name]]
+    idx < required_arg_count ? safe : "#{safe} = nil"
+  end.join(', ')
+end
+
+def optional_arg_replacement(arg, safe)
+  case arg[:ffi]
+  when :int then "(#{safe}.nil? ? 0 : #{safe})"
+  when :pointer then safe
+  else "(#{safe}.nil? ? '' : #{safe})"
+  end
+end
+
+def rewrite_native_call_args(native_call, method, arg_map, required_arg_count)
+  rewritten_native_call = native_call
+  method[:args].each_with_index do |arg, idx|
+    safe = arg_map[arg[:name]]
+    replacement = idx >= required_arg_count ? optional_arg_replacement(arg, safe) : safe
+    rewritten_native_call = rewritten_native_call.gsub(/\b#{Regexp.escape(arg[:name])}\b/, replacement)
+  end
+  rewritten_native_call
+end
+
 def append_ruby_native_call_method(lines, method:, native_call:, indent:)
   ruby_name = ruby_safe_method_name(method[:ruby_name])
   snake_alias = to_snake(ruby_name)
   arg_map = ruby_arg_name_map(method[:args])
   required_arg_count = method.fetch(:required_arg_count, method[:args].length)
-  ruby_args = method[:args].each_with_index.map do |arg, idx|
-    safe = arg_map[arg[:name]]
-    idx < required_arg_count ? safe : "#{safe} = nil"
-  end.join(', ')
-  rewritten_native_call = native_call
-  method[:args].each_with_index do |arg, idx|
-    safe = arg_map[arg[:name]]
-    replacement =
-      if idx >= required_arg_count
-        case arg[:ffi]
-        when :int then "(#{safe}.nil? ? 0 : #{safe})"
-        when :pointer then safe
-        else "(#{safe}.nil? ? '' : #{safe})"
-        end
-      else
-        safe
-      end
-    rewritten_native_call = rewritten_native_call.gsub(/\b#{Regexp.escape(arg[:name])}\b/, replacement)
-  end
+  ruby_args = ruby_method_arguments(method, arg_map, required_arg_count)
+  rewritten_native_call = rewrite_native_call_args(native_call, method, arg_map, required_arg_count)
 
   lines << "#{indent}def #{ruby_name}(#{ruby_args})"
   lines << "#{indent}  #{rewritten_native_call}"
