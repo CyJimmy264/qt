@@ -40,161 +40,10 @@ RUBY_RESERVED_WORDS = %w[
 RUNTIME_METHOD_RENAMES = { 'handle' => 'handle_at' }.freeze
 RUNTIME_RESERVED_RUBY_METHODS = Set['handle'].freeze
 
-def debug_enabled?
-  ENV['QT_RUBY_GENERATOR_DEBUG'] == '1'
-end
-
-def monotonic_now
-  Process.clock_gettime(Process::CLOCK_MONOTONIC)
-end
-
-def debug_log(message)
-  puts "[gen] #{message}" if debug_enabled?
-end
-
-def timed(label)
-  start = monotonic_now
-  value = yield
-  elapsed = monotonic_now - start
-  debug_log("#{label}=#{format('%.3fs', elapsed)}")
-  value
-end
-
-def required_includes(scope)
-  case scope
-  when 'widgets'
-    ['QApplication', 'QtWidgets']
-  else
-    raise "Unsupported QT_RUBY_SCOPE=#{scope.inspect}. Supported: #{SUPPORTED_SCOPES.join(', ')}"
-  end
-end
-
-def ffi_to_cpp_type(ffi)
-  case ffi
-  when :pointer then 'void*'
-  when :string then 'const char*'
-  when :int then 'int'
-  else
-    raise "Unsupported ffi type: #{ffi.inspect}"
-  end
-end
-
-def ffi_return_to_cpp(ffi)
-  case ffi
-  when :void then 'void'
-  when :pointer then 'void*'
-  when :int then 'int'
-  when :string then 'const char*'
-  else
-    raise "Unsupported ffi return: #{ffi.inspect}"
-  end
-end
-
-def to_snake(name)
-  name.gsub(/([a-z\d])([A-Z])/, '\\1_\\2').downcase
-end
-
-def prefix_for_qt_class(qt_class)
-  core = qt_class.delete_prefix('Q')
-  "q#{to_snake(core)}"
-end
-
-def ruby_safe_method_name(name)
-  RUBY_RESERVED_WORDS.include?(name) ? "#{name}_" : name
-end
-
-def ruby_public_method_name(qt_name, explicit_name = nil)
-  base = explicit_name || qt_name
-  safe = ruby_safe_method_name(base)
-  return safe unless RUNTIME_RESERVED_RUBY_METHODS.include?(safe)
-
-  RUNTIME_METHOD_RENAMES.fetch(safe, "#{safe}_qt")
-end
-
-def ruby_safe_arg_name(name, index, used)
-  base = name.to_s
-  base = "arg#{index + 1}" unless base.match?(/\A[A-Za-z_]\w*\z/)
-  base = "#{base}_arg" if RUBY_RESERVED_WORDS.include?(base)
-
-  candidate = base
-  counter = 2
-  while used.include?(candidate)
-    candidate = "#{base}_#{counter}"
-    counter += 1
-  end
-  used << candidate
-  candidate
-end
-
-def ruby_arg_name_map(args)
-  used = Set.new
-  args.each_with_index.to_h { |arg, idx| [arg[:name], ruby_safe_arg_name(arg[:name], idx, used)] }
-end
-
-def lower_camel(name)
-  return name if name.empty?
-
-  name[0].downcase + name[1..]
-end
-
-def property_name_from_setter(qt_name)
-  return nil unless qt_name.start_with?('set')
-  return nil if qt_name.length <= 3
-
-  lower_camel(qt_name.delete_prefix('set'))
-end
-
-def ctor_function_name(spec)
-  "qt_ruby_#{spec[:prefix]}_new"
-end
-
-def method_function_name(spec, method)
-  "qt_ruby_#{spec[:prefix]}_#{to_snake(method[:qt_name])}"
-end
-
-def free_functions
-  [
-    { name: 'qt_ruby_qt_version', ffi_return: :string, args: [] },
-    { name: 'qt_ruby_qapplication_process_events', ffi_return: :void, args: [] },
-    { name: 'qt_ruby_qapplication_top_level_widgets_count', ffi_return: :int, args: [] },
-    { name: 'qt_ruby_set_event_callback', ffi_return: :void, args: [:pointer] },
-    { name: 'qt_ruby_watch_qobject_event', ffi_return: :void, args: [:pointer, :int] },
-    { name: 'qt_ruby_unwatch_qobject_event', ffi_return: :void, args: [:pointer, :int] },
-    { name: 'qt_ruby_set_signal_callback', ffi_return: :void, args: [:pointer] },
-    { name: 'qt_ruby_qobject_connect_signal', ffi_return: :int, args: [:pointer, :string] },
-    { name: 'qt_ruby_qobject_disconnect_signal', ffi_return: :int, args: [:pointer, :string] }
-  ]
-end
-
-def all_ffi_functions(specs)
-  fns = free_functions.dup
-
-  specs.each do |spec|
-    append_constructor_ffi_function(fns, spec)
-    append_qapplication_delete_ffi_function(fns, spec)
-    append_method_ffi_functions(fns, spec)
-  end
-
-  fns
-end
-
-def append_constructor_ffi_function(fns, spec)
-  ctor_args = spec[:constructor][:parent] ? [:pointer] : []
-  fns << { name: ctor_function_name(spec), ffi_return: :pointer, args: ctor_args }
-end
-
-def append_qapplication_delete_ffi_function(fns, spec)
-  return unless spec[:prefix] == 'qapplication'
-
-  fns << { name: 'qt_ruby_qapplication_delete', ffi_return: :void, args: [:pointer] }
-end
-
-def append_method_ffi_functions(fns, spec)
-  spec[:methods].each do |method|
-    args = [:pointer] + method[:args].map { |arg| arg[:ffi] }
-    fns << { name: method_function_name(spec, method), ffi_return: method[:ffi_return], args: args }
-  end
-end
+require_relative 'generate_bridge/core_utils'
+require_relative 'generate_bridge/ffi_api'
+require_relative 'generate_bridge/auto_method_spec_resolver'
+require_relative 'generate_bridge/cpp_method_return_emitter'
 
 def pkg_config_cflags
   cflags = `pkg-config --cflags Qt6Widgets 2>/dev/null`.strip
@@ -721,28 +570,18 @@ end
 
 def resolve_auto_methods_for_spec(ast, spec, auto_entries, manual_methods, auto_mode)
   existing_names = manual_methods.to_set { |m| m[:qt_name] }
+  resolve_method = ->(entry) { resolve_auto_method(ast, spec[:qt_class], entry) }
+  resolver = AutoMethodSpecResolver.new(
+    spec: spec, auto_mode: auto_mode, existing_names: existing_names, resolve_method: resolve_method
+  )
   spec_resolved = 0
   spec_skipped = 0
 
   auto_methods = auto_entries.filter_map do |entry|
-    qt_name = entry.is_a?(String) ? entry : entry[:qt_name]
-    if existing_names.include?(qt_name)
-      spec_skipped += 1
-      next
-    end
+    method, spec_skipped, spec_resolved = resolver.resolve(entry, skipped: spec_skipped, resolved: spec_resolved)
+    next if method.nil?
 
-    resolved = resolve_auto_method(ast, spec[:qt_class], entry)
-    if resolved.nil?
-      if auto_mode == :all
-        spec_skipped += 1
-        next
-      end
-
-      raise "Failed to auto-resolve #{spec[:qt_class]}##{qt_name}"
-    end
-
-    spec_resolved += 1
-    resolved
+    method
   end
 
   [auto_methods, spec_resolved, spec_skipped]
@@ -873,27 +712,31 @@ def constructor_usable_for_codegen?(ast, qt_class)
   ctor_decls.any? { |decl| constructor_supports_parent_only?(decl) || constructor_supports_no_args?(decl) }
 end
 
+def build_base_spec_for_qt_class(ast, qt_class)
+  ctor_decls = collect_constructor_decls(ast, qt_class)
+  supports_parent = ctor_decls.any? { |decl| constructor_supports_parent_only?(decl) }
+  widget_child = qt_class != 'QWidget' && class_inherits?(ast, qt_class, 'QWidget')
+  parent_ctor = supports_parent ? { parent: true, parent_type: 'QWidget*', register_in_parent: widget_child } : { parent: false }
+
+  {
+    qt_class: qt_class,
+    ruby_class: qt_class,
+    include: qt_class,
+    prefix: prefix_for_qt_class(qt_class),
+    constructor: parent_ctor,
+    methods: [],
+    auto_methods: :all,
+    validate: { constructors: [qt_class], methods: [] }
+  }
+end
+
 def build_base_specs(ast)
   specs = [QAPPLICATION_SPEC.dup]
   target_qt_classes = discover_target_qt_classes(ast, GENERATOR_SCOPE)
   debug_log("target_classes scope=#{GENERATOR_SCOPE} count=#{target_qt_classes.length}")
 
   target_qt_classes.each do |qt_class|
-    ctor_decls = collect_constructor_decls(ast, qt_class)
-    supports_parent = ctor_decls.any? { |decl| constructor_supports_parent_only?(decl) }
-    parent_ctor = supports_parent
-    widget_child = qt_class != 'QWidget' && class_inherits?(ast, qt_class, 'QWidget')
-
-    specs << {
-      qt_class: qt_class,
-      ruby_class: qt_class,
-      include: qt_class,
-      prefix: prefix_for_qt_class(qt_class),
-      constructor: parent_ctor ? { parent: true, parent_type: 'QWidget*', register_in_parent: widget_child } : { parent: false },
-      methods: [],
-      auto_methods: :all,
-      validate: { constructors: [qt_class], methods: [] }
-    }
+    specs << build_base_spec_for_qt_class(ast, qt_class)
   end
 
   specs
@@ -1153,25 +996,7 @@ def cpp_null_handle_return(method)
 end
 
 def emit_cpp_method_return(lines, method, invocation)
-  if method[:ffi_return] == :void
-    lines << "  #{invocation};"
-    return
-  end
-
-  if method[:ffi_return] == :string && method[:return_cast] == :qstring_to_utf8
-    lines << "  const QString value = #{invocation};"
-    lines << '  thread_local QByteArray utf8;'
-    lines << '  utf8 = value.toUtf8();'
-    lines << '  return utf8.constData();'
-    return
-  end
-
-  if method[:ffi_return] == :pointer
-    lines << "  return const_cast<void*>(static_cast<const void*>(#{invocation}));"
-    return
-  end
-
-  lines << "  return #{invocation};"
+  CppMethodReturnEmitter.new(lines: lines, method: method, invocation: invocation).emit
 end
 
 def cpp_method_invocation(method)

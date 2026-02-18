@@ -33,12 +33,7 @@ module Qt
       @library_candidates ||= begin
         ext = RbConfig::CONFIG['DLEXT']
         root = File.expand_path('../..', __dir__)
-        load_path_candidates = $LOAD_PATH.flat_map do |entry|
-          [
-            File.join(entry, 'qt', "qt_ruby_bridge.#{ext}"),
-            File.join(entry, "qt_ruby_bridge.#{ext}")
-          ]
-        end
+        load_path_candidates = load_path_library_candidates(ext)
 
         [
           File.join(root, 'build', 'qt', "qt_ruby_bridge.#{ext}"),
@@ -46,6 +41,15 @@ module Qt
           *load_path_candidates,
           'qt_ruby_bridge'
         ].uniq
+      end
+    end
+
+    def load_path_library_candidates(ext)
+      $LOAD_PATH.flat_map do |entry|
+        [
+          File.join(entry, 'qt', "qt_ruby_bridge.#{ext}"),
+          File.join(entry, "qt_ruby_bridge.#{ext}")
+        ]
       end
     end
 

@@ -65,24 +65,32 @@ class QtBindingsTest < Minitest::Test
     skip 'native bridge is not available' unless Qt::Native.available?
 
     with_qapplication do
-      window = QWidget.new
-      label = QLabel.new(window)
-      layout = QVBoxLayout.new(window)
-      button = QPushButton.new(window)
-      button.set_text('Click')
-
-      window.set_layout(layout)
-      window.set_geometry(50, 60, 320, 240)
-      window.x
-      window.y
-      layout.add_widget(button)
-      layout.remove_widget(button)
-      button.hide
-      label.set_style_sheet('background-color: #fafafa;')
+      window, label, layout, button = build_widget_layout_fixture
+      exercise_widget_layout_fixture(window, label, layout, button)
     end
   end
 
   private
+
+  def build_widget_layout_fixture
+    window = QWidget.new
+    label = QLabel.new(window)
+    layout = QVBoxLayout.new(window)
+    button = QPushButton.new(window)
+    button.set_text('Click')
+    [window, label, layout, button]
+  end
+
+  def exercise_widget_layout_fixture(window, label, layout, button)
+    window.set_layout(layout)
+    window.set_geometry(50, 60, 320, 240)
+    window.x
+    window.y
+    layout.add_widget(button)
+    layout.remove_widget(button)
+    button.hide
+    label.set_style_sheet('background-color: #fafafa;')
+  end
 
   def with_qapplication
     app = QApplication.new(0, [])
