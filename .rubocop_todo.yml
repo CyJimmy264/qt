@@ -15,7 +15,7 @@ Metrics/BlockLength:
 # Offense count: 41
 # Configuration parameters: CountComments, CountAsOne, AllowedMethods, AllowedPatterns.
 Metrics/MethodLength:
-  Max: 11
+  Max: 10
 
 # Offense count: 25
 # This cop supports safe autocorrection (--autocorrect).

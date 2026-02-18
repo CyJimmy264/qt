@@ -207,8 +207,7 @@ end
 
 def ast_class_index(ast)
   @ast_class_index_cache ||= {}.compare_by_identity
-  cached = @ast_class_index_cache[ast]
-  return cached if cached
+  return @ast_class_index_cache[ast] if @ast_class_index_cache.key?(ast)
 
   data = init_ast_class_index_data
 

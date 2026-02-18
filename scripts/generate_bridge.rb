@@ -64,8 +64,7 @@ def trace_generated_super_chain(fetch_bases, known_qt, qt_class, super_qt_by_qt)
   visited = {}
   prev = cur = qt_class
   loop do
-    base = next_trace_base(fetch_bases, cur, visited)
-    break unless base
+    break unless (base = next_trace_base(fetch_bases, cur, visited))
 
     visited[base] = true
     super_qt_by_qt[prev] ||= base
@@ -308,9 +307,7 @@ end
 def generate_cpp_method(lines, spec, method)
   fn = method_function_name(spec, method)
   ret = ffi_return_to_cpp(method[:ffi_return])
-  sig = cpp_method_signature(method)
-
-  lines << "extern \"C\" #{ret} #{fn}(#{sig.join(', ')}) {"
+  lines << "extern \"C\" #{ret} #{fn}(#{cpp_method_signature(method).join(', ')}) {"
   lines << '  if (!handle) {'
   lines << cpp_null_handle_return(method)
   lines << '  }'

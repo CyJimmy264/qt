@@ -77,11 +77,8 @@ def ruby_safe_arg_name(name, index, used)
   base = "#{base}_arg" if RUBY_RESERVED_WORDS.include?(base)
 
   candidate = base
-  counter = 2
-  while used.include?(candidate)
-    candidate = "#{base}_#{counter}"
-    counter += 1
-  end
+  counter = 1
+  candidate = "#{base}_#{counter += 1}" while used.include?(candidate)
   used << candidate
   candidate
 end

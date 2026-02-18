@@ -15,9 +15,7 @@ module Qt
       handle = widget_handle(widget) || raise(ArgumentError, 'widget handle is required')
 
       @event_handlers ||= {}
-      per_widget = (@event_handlers[handle.address] ||= {})
-      handlers = (per_widget[event_type] ||= [])
-      handlers << block
+      ((@event_handlers[handle.address] ||= {})[event_type] ||= []) << block
 
       Qt::Native.watch_qobject_event(handle, event_type)
       true
@@ -40,8 +38,7 @@ module Qt
       raise ArgumentError, 'signal name is required' if signal_key.empty?
 
       @signal_handlers ||= {}
-      per_widget = (@signal_handlers[handle.address] ||= {})
-      per_signal = (per_widget[signal_key] ||= { index: nil, blocks: [] })
+      per_signal = ((@signal_handlers[handle.address] ||= {})[signal_key] ||= { index: nil, blocks: [] })
       if per_signal[:index].nil?
         index = Qt::Native.qobject_connect_signal(handle, signal_key)
         raise ArgumentError, "failed to connect signal #{signal_key.inspect} (code=#{index})" if index.negative?

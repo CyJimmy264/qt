@@ -120,10 +120,7 @@ def build_auto_method_args(parsed, entry, qt_class, int_cast_types)
     arg_info ||= { ffi: :int } if cast_override
     return nil unless arg_info
 
-    arg_hash = { name: param[:name], ffi: arg_info[:ffi] }
-    cast = cast_override || arg_info[:cast]
-    arg_hash[:cast] = cast if cast
-    arg_hash
+    { name: param[:name], ffi: arg_info[:ffi], cast: cast_override || arg_info[:cast] }.compact
   end
 end
 
@@ -216,15 +213,13 @@ end
 
 def collect_method_names_with_bases(ast, class_name, visited = {})
   cache, cache_key = method_names_cache_entry(ast, class_name)
-  cached = cache[cache_key]
-  return cached if cached
+  return cache[cache_key] if cache[cache_key]
   return [] if invalid_method_name_scope?(class_name, visited)
 
   visited[class_name] = true
   index = ast_class_index(ast)
   own_names = index[:methods_by_class].fetch(class_name, {}).keys
   base_names = collect_base_method_names_with_bases(ast, class_name, visited)
-
   combined = (own_names + base_names).uniq
   cache[cache_key] = combined
   combined
