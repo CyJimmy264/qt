@@ -30,12 +30,20 @@ require GENERATED_WIDGETS
 module Qt
 end
 
-QApplication = Qt::QApplication unless defined?(QApplication)
-QWidget = Qt::QWidget unless defined?(QWidget)
-QLabel = Qt::QLabel unless defined?(QLabel)
-QPushButton = Qt::QPushButton unless defined?(QPushButton)
-QLineEdit = Qt::QLineEdit unless defined?(QLineEdit)
-QVBoxLayout = Qt::QVBoxLayout unless defined?(QVBoxLayout)
-QTableWidget = Qt::QTableWidget unless defined?(QTableWidget)
-QTableWidgetItem = Qt::QTableWidgetItem if defined?(Qt::QTableWidgetItem) && !defined?(QTableWidgetItem)
-QScrollArea = Qt::QScrollArea unless defined?(QScrollArea)
+{
+  QApplication: :QApplication,
+  QWidget: :QWidget,
+  QLabel: :QLabel,
+  QPushButton: :QPushButton,
+  QLineEdit: :QLineEdit,
+  QVBoxLayout: :QVBoxLayout,
+  QTableWidget: :QTableWidget,
+  QTableWidgetItem: :QTableWidgetItem,
+  QScrollArea: :QScrollArea,
+  QTimer: :QTimer
+}.each do |top_level, qt_const|
+  next unless Qt.const_defined?(qt_const, false)
+  next if Object.const_defined?(top_level, false)
+
+  Object.const_set(top_level, Qt.const_get(qt_const))
+end

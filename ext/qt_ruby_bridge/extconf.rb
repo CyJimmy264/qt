@@ -20,7 +20,10 @@ abort 'pkg-config is required to build qt-ruby bridge.' unless find_executable(P
 generator = File.expand_path('../../scripts/generate_bridge.rb', __dir__)
 abort "Generator script not found: #{generator}" unless File.exist?(generator)
 
-abort 'Failed to generate Qt bridge files.' unless system(RbConfig.ruby, generator)
+generator_env = {}
+scope = ENV.fetch('QT_RUBY_SCOPE', nil)
+generator_env['QT_RUBY_SCOPE'] = scope if scope && !scope.empty?
+abort 'Failed to generate Qt bridge files.' unless system(generator_env, RbConfig.ruby, generator)
 
 missing = QT_PACKAGES.reject { |pkg| pkg_config('--exists', pkg) }
 abort "Missing Qt packages: #{missing.join(', ')}" unless missing.empty?

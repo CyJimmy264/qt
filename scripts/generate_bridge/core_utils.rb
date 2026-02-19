@@ -24,6 +24,8 @@ def required_includes(scope)
   case scope
   when 'widgets'
     %w[QApplication QtWidgets]
+  when 'qobject', 'all'
+    %w[QApplication QtCore QtGui QtWidgets]
   else
     raise "Unsupported QT_RUBY_SCOPE=#{scope.inspect}. Supported: #{SUPPORTED_SCOPES.join(', ')}"
   end

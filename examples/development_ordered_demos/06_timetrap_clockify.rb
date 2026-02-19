@@ -744,14 +744,11 @@ end
 
 refresh_data.call
 window.show
-QApplication.process_events
-
 last_tick = Time.now
-
-# TODO: Replace manual process_events loop with app.exec + QTimer updates.
-loop do
-  QApplication.process_events
-  break if window.is_visible.zero?
+heartbeat = QTimer.new(window)
+heartbeat.set_interval(50)
+heartbeat.connect('timeout') do |_payload|
+  next if window.is_visible.zero?
 
   now = Time.now
   clock.set_text(now.strftime('%a %d %b %Y  %H:%M:%S'))
@@ -776,7 +773,9 @@ loop do
     render_blocks.call
     pending_render = false
   end
-  sleep(0.01)
 end
+heartbeat.start
+
+app.exec
 
 app.dispose

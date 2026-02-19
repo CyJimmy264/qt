@@ -77,6 +77,7 @@ bundle exec rake install
 ```
 
 `rake install` installs into your current Ruby environment (including active `rbenv` version).
+`rake compile` builds the full bridge with `QT_RUBY_SCOPE=all` by default.
 
 ### Gem usage
 
@@ -205,6 +206,22 @@ Everything generated/build-related is under `build/` and should stay out of git.
 bundle exec rake test
 bundle exec rake compile
 bundle exec rake rubocop
+```
+
+### Generation Scope
+
+Default build scope is `all`. You can still override scope manually with `QT_RUBY_SCOPE`:
+
+- `widgets` (default): QWidget/QLayout-oriented classes.
+- `qobject`: QObject descendants excluding QWidget/QLayout branch.
+- `all`: combined public surface from `widgets` + `qobject` scopes (default build mode).
+
+Examples:
+
+```bash
+QT_RUBY_SCOPE=widgets bundle exec rake compile
+QT_RUBY_SCOPE=qobject bundle exec rake compile
+QT_RUBY_SCOPE=all bundle exec rake compile
 ```
 
 If Qt is in a custom prefix:

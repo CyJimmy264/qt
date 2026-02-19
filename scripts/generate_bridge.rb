@@ -13,8 +13,8 @@ API_PATH = File.join(GENERATED_DIR, 'bridge_api.rb')
 RUBY_WIDGETS_PATH = File.join(GENERATED_DIR, 'widgets.rb')
 
 # Universal generation policy: class set is discovered from AST per scope.
-GENERATOR_SCOPE = (ENV['QT_RUBY_SCOPE'] || 'widgets').freeze
-SUPPORTED_SCOPES = %w[widgets].freeze
+GENERATOR_SCOPE = (ENV['QT_RUBY_SCOPE'] || 'all').freeze
+SUPPORTED_SCOPES = %w[widgets qobject all].freeze
 
 QAPPLICATION_SPEC = {
   qt_class: 'QApplication',
@@ -605,7 +605,7 @@ def generate_ruby_widget_class_header(lines, spec, metadata:, super_ruby:, widge
   lines << '    attr_reader :children' if widget_root
   lines << '    include Inspectable'
   lines << '    include ChildrenTracking' if widget_root
-  lines << '    include EventRuntime::WidgetMethods' if widget_root
+  lines << '    include EventRuntime::WidgetMethods'
   lines << ''
 end
 
