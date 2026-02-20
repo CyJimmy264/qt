@@ -195,10 +195,27 @@ Everything generated/build-related is under `build/` and should stay out of git.
 
 ## Roadmap
 
-- Qt signals/slots callbacks into Ruby blocks
-- more widgets/layouts and model/view types
-- macOS/Linux packaging hardening
-- CI matrix for multiple Ruby/Qt versions
+### Done
+
+- AST-driven generation with scope support: `QT_RUBY_SCOPE=widgets|qobject|all`
+- default compile path switched to `all` (`widgets + qobject`)
+- generated Qt inheritance in Ruby classes (including intermediate Qt wrappers)
+- Qt-native event/signal runtime wired to Ruby (`on`, `connect`, `disconnect`)
+- `QTimer` available in generated API with `connect('timeout')` support
+
+### Next
+
+- typed signal payloads (not only raw/placeholder payload)
+- richer QObject metaobject Ruby API (`meta_object`, methods/signatures/properties introspection)
+- normalize signal naming rules for overloads and deterministic connect behavior
+- finish rewriting complex demos to pure event/signal model (`app.exec`, timer-driven updates, no manual polling loops)
+
+### Later
+
+- expand generated surface for additional Qt modules (network, sql, xml, etc.) using the same generator policy
+- packaging hardening for Linux/macOS (install/build paths, gem install reliability)
+- CI matrix for Ruby/Qt combinations and scope modes (`widgets`, `qobject`, `all`)
+- add performance checks for generator traversal and compile size/time regression tracking
 
 ## Development
 
