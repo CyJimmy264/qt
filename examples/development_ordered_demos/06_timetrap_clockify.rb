@@ -25,11 +25,6 @@ PROJECT_SLOT_COUNT = 14
 TIMETRAP_BIN = ENV.fetch('TIMETRAP_BIN', 't')
 TIMETRAP_API = defined?(Timetrap::Entry) && defined?(Timetrap::Timer)
 DEBUG_UI = ENV['TIMETRAP_UI_DEBUG'] == '1'
-AUTO_REFRESH_SEC = begin
-  Integer(ENV.fetch('TIMETRAP_UI_AUTO_REFRESH_SEC', '30'))
-rescue ArgumentError, TypeError
-  30
-end
 
 BG_APP = 'background-color: #eef2f5; border: 1px solid #d6dde5;'
 BG_SIDEBAR = 'background-color: #f7f9fb; border-right: 1px solid #d9e0e7;'
@@ -680,29 +675,26 @@ handle_action = lambda do |key|
   case key
   when :start
     start_tracking.call
-    pending_refresh = true
+    current_started_at ||= Time.now
   when :stop
     stop_tracking.call
     current_started_at = nil
-    pending_refresh = true
   when :refresh
     pending_refresh = true
   end
 rescue StandardError
-  pending_refresh = true
+  pending_render = true
 end
 
 start_btn.connect('clicked') do |_checked|
   dbg.call('click START')
   flash.call(start_btn)
-  pending_refresh = true
   handle_action.call(:start)
 end
 
 stop_btn.connect('clicked') do |_checked|
   dbg.call('click STOP')
   flash.call(stop_btn)
-  pending_refresh = true
   handle_action.call(:stop)
 end
 
@@ -744,7 +736,6 @@ end
 
 refresh_data.call
 window.show
-last_tick = Time.now
 heartbeat = QTimer.new(window)
 heartbeat.set_interval(50)
 heartbeat.connect('timeout') do |_payload|
@@ -757,12 +748,6 @@ heartbeat.connect('timeout') do |_payload|
     live_timer.set_text(seconds_to_hms.call(now - current_started_at))
   else
     live_timer.set_text('00:00:00')
-  end
-
-  if AUTO_REFRESH_SEC.positive? && now - last_tick > AUTO_REFRESH_SEC
-    dbg.call("auto refresh tick interval=#{AUTO_REFRESH_SEC}s")
-    pending_refresh = true
-    last_tick = now
   end
 
   if pending_refresh
