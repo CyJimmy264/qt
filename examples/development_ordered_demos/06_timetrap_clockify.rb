@@ -524,20 +524,13 @@ render_week_header = lambda do |wk, week_entries, y, week_keys_this_render|
   week_expanded = expanded_weeks.fetch(week_key, true)
   week_marker = week_expanded ? '▼' : '▶'
   week_label = QLabel.new(scroll_host)
-  week_label.set_geometry(10, y, CONTENT_W - 162, 44)
+  week_label.set_geometry(10, y, CONTENT_W - 22, 44)
   week_label.set_style_sheet(WEEK_STYLE)
   week_label.set_text(week_title_text.call(week_marker, wk, week_sec))
   week_label.show
   render_widgets << week_label
-  toggle = QLabel.new(scroll_host)
-  toggle.set_geometry(CONTENT_W - 144, y + 4, 132, 36)
-  toggle.set_style_sheet(PROJECT_ROW)
-  toggle.set_alignment(Qt::AlignCenter)
-  toggle.set_text(week_expanded ? 'COLLAPSE WEEK' : 'EXPAND WEEK')
-  toggle.show
-  render_widgets << toggle
   week_click_key = week_key
-  toggle.on(:mouse_button_release) do |_ev|
+  week_label.on(:mouse_button_release) do |_ev|
     expanded_weeks[week_click_key] = !expanded_weeks.fetch(week_click_key, true)
     dbg.call("click week-toggle #{week_click_key} expanded=#{expanded_weeks[week_click_key]}")
     pending_render = true
