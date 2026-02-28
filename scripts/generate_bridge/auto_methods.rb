@@ -38,7 +38,6 @@ def map_cpp_intlike_arg_type(type_name, qt_class, int_cast_types)
   map_qualified_intlike_arg_type(type_name, qt_class, int_cast_types)
 end
 
-# rubocop:disable Metrics/AbcSize,Metrics/CyclomaticComplexity,Metrics/MethodLength,Metrics/PerceivedComplexity
 def map_cpp_arg_type(type_name, qt_class: nil, int_cast_types: nil)
   raw = type_name.to_s.strip
   return nil if raw.end_with?('&') && !raw.start_with?('const ')
@@ -56,7 +55,6 @@ def map_cpp_arg_type(type_name, qt_class: nil, int_cast_types: nil)
 
   map_cpp_pointer_arg_type(type, qt_class) || map_cpp_intlike_arg_type(type, qt_class, int_cast_types)
 end
-# rubocop:enable Metrics/AbcSize,Metrics/CyclomaticComplexity,Metrics/MethodLength,Metrics/PerceivedComplexity
 
 def normalized_cpp_type_name(type_name)
   type = type_name.to_s.strip

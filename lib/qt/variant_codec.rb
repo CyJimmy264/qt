@@ -9,7 +9,6 @@ module Qt
 
     PREFIX = 'qtv:'
 
-    # rubocop:disable Metrics/CyclomaticComplexity
     def encode(value)
       return "#{PREFIX}nil" if value.nil?
       return encode_boolean(value) if [true, false].include?(value)
@@ -20,7 +19,6 @@ module Qt
 
       "#{PREFIX}str:#{base64_encode(value.to_s)}"
     end
-    # rubocop:enable Metrics/CyclomaticComplexity
 
     def decode(value)
       raw = value.to_s

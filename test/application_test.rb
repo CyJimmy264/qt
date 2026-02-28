@@ -2,7 +2,6 @@
 
 require_relative 'test_helper'
 
-# rubocop:disable Metrics/ClassLength
 class QtBindingsTest < Minitest::Test
   def test_version_present
     refute_nil Qt::VERSION
@@ -71,7 +70,6 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
-  # rubocop:disable Metrics/MethodLength
   def test_qss_selector_matches_after_object_name_change
     skip 'native bridge is not available' unless Qt::Native.available?
 
@@ -92,7 +90,6 @@ class QtBindingsTest < Minitest::Test
       assert_equal 'ID matched', button.text
     end
   end
-  # rubocop:enable Metrics/MethodLength
 
   def test_qicon_and_window_icon_smoke
     skip 'native bridge is not available' unless Qt::Native.available?
@@ -108,7 +105,6 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
-  # rubocop:disable Metrics/AbcSize,Metrics/MethodLength
   def test_qss_selector_matches_dynamic_property
     skip 'native bridge is not available' unless Qt::Native.available?
 
@@ -131,9 +127,7 @@ class QtBindingsTest < Minitest::Test
       assert_equal 'Role matched', button.text
     end
   end
-  # rubocop:enable Metrics/AbcSize,Metrics/MethodLength
 
-  # rubocop:disable Metrics/AbcSize,Metrics/MethodLength,Minitest/MultipleAssertions
   def test_dynamic_property_roundtrip_typed_values
     skip 'native bridge is not available' unless Qt::Native.available?
 
@@ -157,7 +151,6 @@ class QtBindingsTest < Minitest::Test
       assert_equal({ 'k' => 1, 's' => 'v' }, button.property('map_payload'))
     end
   end
-  # rubocop:enable Metrics/AbcSize,Metrics/MethodLength,Minitest/MultipleAssertions
 
   private
 
@@ -193,4 +186,3 @@ class QtBindingsTest < Minitest::Test
     QApplication.process_events
   end
 end
-# rubocop:enable Metrics/ClassLength

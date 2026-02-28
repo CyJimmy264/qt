@@ -265,7 +265,6 @@ def emit_cpp_parent_constructor(lines, name, spec)
   lines << '}'
 end
 
-# rubocop:disable Metrics/MethodLength
 def generate_cpp_constructor(lines, spec)
   name = ctor_function_name(spec)
 
@@ -285,7 +284,6 @@ def generate_cpp_constructor(lines, spec)
 
   emit_cpp_parent_constructor(lines, name, spec)
 end
-# rubocop:enable Metrics/MethodLength
 
 def generate_cpp_delete(lines)
   lines << 'extern "C" void qt_ruby_qapplication_delete(void* app_handle) {'
@@ -594,7 +592,6 @@ def rewrite_native_call_args(native_call, method, arg_map, required_arg_count)
   rewritten_native_call
 end
 
-# rubocop:disable Metrics/MethodLength
 def append_ruby_native_call_method(lines, method:, native_call:, indent:)
   ruby_name = ruby_safe_method_name(method[:ruby_name])
   snake_alias = to_snake(ruby_name)
@@ -609,7 +606,6 @@ def append_ruby_native_call_method(lines, method:, native_call:, indent:)
   lines << "#{indent}end"
   lines << "#{indent}alias_method :#{snake_alias}, :#{ruby_name}" if snake_alias != ruby_name
 end
-# rubocop:enable Metrics/MethodLength
 
 def ruby_native_method_body(method, rewritten_native_call)
   return "Qt::VariantCodec.decode(#{rewritten_native_call})" if method[:return_cast] == :qvariant_to_utf8
