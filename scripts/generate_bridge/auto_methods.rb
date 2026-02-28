@@ -38,21 +38,25 @@ def map_cpp_intlike_arg_type(type_name, qt_class, int_cast_types)
   map_qualified_intlike_arg_type(type_name, qt_class, int_cast_types)
 end
 
+# rubocop:disable Metrics/AbcSize,Metrics/CyclomaticComplexity,Metrics/MethodLength,Metrics/PerceivedComplexity
 def map_cpp_arg_type(type_name, qt_class: nil, int_cast_types: nil)
   raw = type_name.to_s.strip
   return nil if raw.end_with?('&') && !raw.start_with?('const ')
+
   compact_raw = raw.gsub(/\s+/, ' ')
 
   type = raw
   type = type.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
   return nil if unsupported_cpp_type?(type)
   return { ffi: :string, cast: :qstring } if type == 'QString'
+  return { ffi: :pointer, cast: :qicon_ref } if type == 'QIcon'
   return { ffi: :string, cast: :qany_string_view } if type == 'QAnyStringView'
   return { ffi: :string, cast: :qvariant_from_utf8 } if type == 'QVariant'
   return { ffi: :string } if compact_raw.match?(/\Aconst\s+char\s*\*\z/)
 
   map_cpp_pointer_arg_type(type, qt_class) || map_cpp_intlike_arg_type(type, qt_class, int_cast_types)
 end
+# rubocop:enable Metrics/AbcSize,Metrics/CyclomaticComplexity,Metrics/MethodLength,Metrics/PerceivedComplexity
 
 def normalized_cpp_type_name(type_name)
   type = type_name.to_s.strip

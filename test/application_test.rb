@@ -94,6 +94,20 @@ class QtBindingsTest < Minitest::Test
   end
   # rubocop:enable Metrics/MethodLength
 
+  def test_qicon_and_window_icon_smoke
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do |app|
+      window = QWidget.new
+      icon = QIcon.new('/tmp/qt-ruby-missing-icon.png')
+
+      assert_respond_to window, :set_window_icon
+      window.set_window_icon(icon)
+
+      refute_respond_to app, :set_window_icon
+    end
+  end
+
   # rubocop:disable Metrics/AbcSize,Metrics/MethodLength
   def test_qss_selector_matches_dynamic_property
     skip 'native bridge is not available' unless Qt::Native.available?

@@ -222,6 +222,7 @@ end
 def arg_expr(arg)
   case arg[:cast]
   when :qstring then "as_qstring(#{arg[:name]})"
+  when :qicon_ref then "*static_cast<QIcon*>(#{arg[:name]})"
   when :qany_string_view then "QAnyStringView(as_qstring(#{arg[:name]}))"
   when :qvariant_from_utf8 then "qvariant_from_bridge_value(#{arg[:name]})"
   when :alignment then "static_cast<Qt::Alignment>(#{arg[:name]})"
@@ -246,6 +247,15 @@ def emit_cpp_default_constructor(lines, name, qt_class)
   lines << '}'
 end
 
+def emit_cpp_string_path_constructor(lines, name, qt_class)
+  lines << "extern \"C\" void* #{name}(const char* path) {"
+  lines << '  if (!path || !path[0]) {'
+  lines << "    return new #{qt_class}();"
+  lines << '  }'
+  lines << "  return new #{qt_class}(as_qstring(path));"
+  lines << '}'
+end
+
 def emit_cpp_parent_constructor(lines, name, spec)
   parent_type = spec[:constructor][:parent_type]
   parent_class = parent_type.delete('*')
@@ -255,11 +265,16 @@ def emit_cpp_parent_constructor(lines, name, spec)
   lines << '}'
 end
 
+# rubocop:disable Metrics/MethodLength
 def generate_cpp_constructor(lines, spec)
   name = ctor_function_name(spec)
 
   if spec[:constructor][:mode] == :qapplication
     emit_cpp_qapplication_constructor(lines, name)
+    return
+  end
+  if spec[:constructor][:mode] == :string_path
+    emit_cpp_string_path_constructor(lines, name, spec[:qt_class])
     return
   end
 
@@ -270,6 +285,7 @@ def generate_cpp_constructor(lines, spec)
 
   emit_cpp_parent_constructor(lines, name, spec)
 end
+# rubocop:enable Metrics/MethodLength
 
 def generate_cpp_delete(lines)
   lines << 'extern "C" void qt_ruby_qapplication_delete(void* app_handle) {'
@@ -347,6 +363,7 @@ def cpp_bridge_prelude
   <<~CPP
     #include <QByteArray>
     #include <QAnyStringView>
+    #include <QIcon>
     #include <QJsonDocument>
     #include <QJsonParseError>
     #include <QString>
@@ -611,7 +628,9 @@ def append_ruby_property_writer(lines, method:, indent:)
 end
 
 def append_widget_initializer(lines, spec:, widget_root:, indent:)
-  if spec[:constructor][:parent]
+  if spec[:constructor][:mode] == :string_path
+    append_string_path_initializer(lines, spec, indent)
+  elsif spec[:constructor][:parent]
     append_parent_widget_initializer(lines, spec, widget_root, indent)
   else
     append_default_widget_initializer(lines, spec, indent)
@@ -631,6 +650,11 @@ end
 def append_default_widget_initializer(lines, spec, indent)
   lines << "#{indent}def initialize(_argc = 0, _argv = [])"
   lines << "#{indent}  @handle = Native.#{spec[:prefix]}_new"
+end
+
+def append_string_path_initializer(lines, spec, indent)
+  lines << "#{indent}def initialize(path = nil)"
+  lines << "#{indent}  @handle = Native.#{spec[:prefix]}_new(path.to_s)"
 end
 
 def append_parent_registration_logic(lines, spec, indent)

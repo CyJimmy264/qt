@@ -1,5 +1,19 @@
 # frozen_string_literal: true
 
+AUXILIARY_SCOPE_CLASSES = {
+  'widgets' => %w[QIcon],
+  'qobject' => [],
+  'all' => %w[QIcon]
+}.freeze
+
+def auxiliary_scope_classes(scope)
+  AUXILIARY_SCOPE_CLASSES.fetch(scope, [])
+end
+
+def auxiliary_scope_class?(qt_class, scope)
+  auxiliary_scope_classes(scope).include?(qt_class)
+end
+
 def constructor_supports_parent_only?(decl)
   return false unless decl['__effective_access'] == 'public'
 
@@ -67,6 +81,8 @@ def q_class_names(ast)
 end
 
 def class_matches_scope?(ast, qt_class, scope)
+  return true if auxiliary_scope_class?(qt_class, scope)
+
   case scope
   when 'widgets' then widget_target_qt_class?(ast, qt_class)
   when 'qobject' then qobject_target_qt_class?(ast, qt_class)
@@ -133,6 +149,7 @@ def build_base_spec_for_qt_class(ast, qt_class)
   parent_type = ctor_decls.filter_map { |decl| parent_constructor_first_type(decl) }.first
   widget_child = qt_class != 'QWidget' && class_inherits?(ast, qt_class, 'QWidget')
   parent_ctor = parent_type ? parent_constructor_for_type(parent_type, widget_child) : { parent: false }
+  parent_ctor = qicon_constructor if qt_class == 'QIcon'
   base_spec_hash(qt_class, parent_ctor)
 end
 
@@ -154,6 +171,10 @@ end
 
 def parent_constructor_for_type(parent_type, widget_child)
   { parent: true, parent_type: parent_type, register_in_parent: widget_child }
+end
+
+def qicon_constructor
+  { parent: false, mode: :string_path }
 end
 
 def build_base_specs(ast)

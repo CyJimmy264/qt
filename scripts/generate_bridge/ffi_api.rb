@@ -27,8 +27,15 @@ def all_ffi_functions(specs)
 end
 
 def append_constructor_ffi_function(fns, spec)
-  ctor_args = spec[:constructor][:parent] ? [:pointer] : []
+  ctor_args = constructor_ffi_args(spec)
   fns << { name: ctor_function_name(spec), ffi_return: :pointer, args: ctor_args }
+end
+
+def constructor_ffi_args(spec)
+  return [:pointer] if spec[:constructor][:parent]
+  return [:string] if spec[:constructor][:mode] == :string_path
+
+  []
 end
 
 def append_qapplication_delete_ffi_function(fns, spec)

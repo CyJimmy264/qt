@@ -41,7 +41,8 @@ end
   QTableWidget: :QTableWidget,
   QTableWidgetItem: :QTableWidgetItem,
   QScrollArea: :QScrollArea,
-  QTimer: :QTimer
+  QTimer: :QTimer,
+  QIcon: :QIcon
 }.each do |top_level, qt_const|
   next unless Qt.const_defined?(qt_const, false)
   next if Object.const_defined?(top_level, false)
