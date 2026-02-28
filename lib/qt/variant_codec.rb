@@ -8,16 +8,19 @@ module Qt
     module_function
 
     PREFIX = 'qtv:'
+    DIRECT_ENCODERS = {
+      Integer => ->(v) { ['int', v.to_s] },
+      Float => ->(v) { ['float', v.to_s] },
+      String => ->(v) { ['str', base64_encode(v)] }
+    }.freeze
+    JSON_ENCODABLE_CLASSES = [Array, Hash].freeze
 
     def encode(value)
       return "#{PREFIX}nil" if value.nil?
       return encode_boolean(value) if [true, false].include?(value)
-      return "#{PREFIX}int:#{value}" if value.is_a?(Integer)
-      return "#{PREFIX}float:#{value}" if value.is_a?(Float)
-      return "#{PREFIX}str:#{base64_encode(value)}" if value.is_a?(String)
-      return "#{PREFIX}json:#{base64_encode(JSON.generate(value))}" if value.is_a?(Array) || value.is_a?(Hash)
 
-      "#{PREFIX}str:#{base64_encode(value.to_s)}"
+      tag, payload = encoded_tag_and_payload(value)
+      "#{PREFIX}#{tag}:#{payload}"
     end
 
     def decode(value)
@@ -54,6 +57,15 @@ module Qt
 
     def base64_decode(value)
       value.unpack1('m0')
+    end
+
+    def encoded_tag_and_payload(value)
+      direct = DIRECT_ENCODERS[value.class]
+      return direct.call(value) if direct
+
+      return ['json', base64_encode(JSON.generate(value))] if JSON_ENCODABLE_CLASSES.any? { |k| value.is_a?(k) }
+
+      ['str', base64_encode(value.to_s)]
     end
   end
 end
