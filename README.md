@@ -213,13 +213,19 @@ Everything generated/build-related is under `build/` and should stay out of git.
 - generated Qt inheritance in Ruby classes (including intermediate Qt wrappers)
 - Qt-native event/signal runtime wired to Ruby at QObject level (`on`, `connect`, `disconnect`)
 - `QTimer` available in generated API with `connect('timeout')` support
+- `06_timetrap_clockify` moved to `app.exec` + `QTimer` update loop (no manual polling loop)
+- QObject styling hooks exposed for QSS selectors:
+  - `setObjectName` / `object_name=`
+  - `setProperty` / `property` (via QVariant bridge codec)
+- window icon support from generated API:
+  - `QIcon.new(path)`
+  - `QWidget#setWindowIcon` / `set_window_icon`
 
 ### Next
 
 - typed signal payloads (not only raw/placeholder payload)
 - richer QObject metaobject Ruby API (`meta_object`, methods/signatures/properties introspection)
 - normalize signal naming rules for overloads and deterministic connect behavior
-- finish rewriting complex demos to pure event/signal model (`app.exec`, timer-driven updates, no manual polling loops)
 
 ### Later
 
