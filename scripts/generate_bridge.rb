@@ -247,12 +247,18 @@ def emit_cpp_default_constructor(lines, name, qt_class)
   lines << '}'
 end
 
-def emit_cpp_string_path_constructor(lines, name, qt_class)
+def string_ctor_arg_expr(var_name, cast)
+  case cast || :qstring
+  when :qany_string_view then "QAnyStringView(as_qstring(#{var_name}))"
+  when :cstr then var_name
+  else "as_qstring(#{var_name})"
+  end
+end
+
+def emit_cpp_string_path_constructor(lines, name, qt_class, arg_cast)
   lines << "extern \"C\" void* #{name}(const char* path) {"
-  lines << '  if (!path || !path[0]) {'
-  lines << "    return new #{qt_class}();"
-  lines << '  }'
-  lines << "  return new #{qt_class}(as_qstring(path));"
+  lines << '  const char* raw = path ? path : "";'
+  lines << "  return new #{qt_class}(#{string_ctor_arg_expr('raw', arg_cast)});"
   lines << '}'
 end
 
@@ -273,7 +279,7 @@ def generate_cpp_constructor(lines, spec)
     return
   end
   if spec[:constructor][:mode] == :string_path
-    emit_cpp_string_path_constructor(lines, name, spec[:qt_class])
+    emit_cpp_string_path_constructor(lines, name, spec[:qt_class], spec[:constructor][:arg_cast])
     return
   end
 

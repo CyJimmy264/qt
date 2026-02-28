@@ -1,5 +1,6 @@
 Metrics/AbcSize:
   Exclude:
+    - 'scripts/generate_bridge/spec_discovery.rb'
     - 'scripts/generate_bridge/auto_methods.rb'
     - 'test/application_test.rb'
 
@@ -9,17 +10,20 @@ Metrics/ClassLength:
 
 Metrics/CyclomaticComplexity:
   Exclude:
+    - 'scripts/generate_bridge/spec_discovery.rb'
     - 'scripts/generate_bridge/auto_methods.rb'
     - 'lib/qt/variant_codec.rb'
 
 Metrics/MethodLength:
   Exclude:
     - 'scripts/generate_bridge.rb'
+    - 'scripts/generate_bridge/spec_discovery.rb'
     - 'scripts/generate_bridge/auto_methods.rb'
     - 'test/application_test.rb'
 
 Metrics/PerceivedComplexity:
   Exclude:
+    - 'scripts/generate_bridge/spec_discovery.rb'
     - 'scripts/generate_bridge/auto_methods.rb'
 
 Minitest/MultipleAssertions:

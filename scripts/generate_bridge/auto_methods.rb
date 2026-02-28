@@ -121,23 +121,40 @@ end
 
 def build_auto_method_args(parsed, entry, qt_class, int_cast_types)
   arg_cast_overrides = Array(entry[:arg_casts])
-  parsed[:params].each_with_index.map do |param, idx|
+  params = parsed[:params]
+  required_arg_count = 0
+  args = []
+
+  params.each_with_index do |param, idx|
     cast_override = arg_cast_overrides[idx]
     arg_info = map_cpp_arg_type(param[:type], qt_class: qt_class, int_cast_types: int_cast_types)
     arg_info ||= { ffi: :int } if cast_override
-    return nil unless arg_info
+    unless arg_info
+      return nil unless skip_unsupported_optional_tail?(params, idx, param)
 
-    { name: param[:name], ffi: arg_info[:ffi], cast: cast_override || arg_info[:cast] }.compact
+      break
+    end
+
+    args << { name: param[:name], ffi: arg_info[:ffi], cast: cast_override || arg_info[:cast] }.compact
+    required_arg_count += 1 unless param[:has_default]
   end
+
+  [args, required_arg_count]
 end
 
-def build_auto_method_hash(entry, ret_info, args, parsed)
+def skip_unsupported_optional_tail?(params, idx, param)
+  return false unless param[:has_default]
+
+  params[(idx + 1)..].all? { |rest| rest[:has_default] }
+end
+
+def build_auto_method_hash(entry, ret_info, args, required_arg_count)
   method = {
     qt_name: entry[:qt_name],
     ruby_name: ruby_public_method_name(entry[:qt_name], entry[:ruby_name]),
     ffi_return: ret_info[:ffi_return],
     args: args,
-    required_arg_count: parsed[:required_arg_count]
+    required_arg_count: required_arg_count
   }
   method[:return_cast] = ret_info[:return_cast] if ret_info[:return_cast]
   method
@@ -150,10 +167,10 @@ def build_auto_method_from_decl(method_decl, entry, qt_class:, int_cast_types:)
   ret_info = map_cpp_return_type(parsed[:return_type])
   return nil unless ret_info
 
-  args = build_auto_method_args(parsed, entry, qt_class, int_cast_types)
+  args, required_arg_count = build_auto_method_args(parsed, entry, qt_class, int_cast_types)
   return nil unless args
 
-  build_auto_method_hash(entry, ret_info, args, parsed)
+  build_auto_method_hash(entry, ret_info, args, required_arg_count)
 end
 
 def valid_auto_exportable_identifier?(name)
@@ -170,6 +187,7 @@ def forbidden_auto_exportable_method_name?(name)
 
   forbidden_names = %w[
     event eventFilter childEvent customEvent timerEvent connectNotify disconnectNotify d_func connect disconnect
+    initialize
   ]
   return true if forbidden_names.include?(name)
 
