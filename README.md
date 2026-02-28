@@ -134,6 +134,8 @@ Generated Ruby API is intentionally close to Qt API, but follows universal bridg
   - `off(event = nil)` / alias `off_event`
   - `connect(signal, &block)` / aliases `on_signal`, `slot`
   - `disconnect(signal = nil)` / alias `off_signal`
+  - these helpers are mixed into generated `QObject` descendants (for example `QWidget`, `QPushButton`, `QTimer`)
+  - non-`QObject` value classes (`QIcon`, `QPixmap`, `QImage`) intentionally do not expose `connect`/`on`
 - Introspection helpers are Ruby-layer helpers:
   - `q_inspect`, aliases `qt_inspect`, `to_h`
 - Top-level constant aliases are provided for convenience:
@@ -171,6 +173,15 @@ ruby examples/development_ordered_demos/01_dsl_hello.rb
 ruby examples/development_ordered_demos/02_live_layout_console.rb
 ```
 
+QObject signal example:
+
+```ruby
+timer = QTimer.new
+timer.set_interval(1000)
+timer.connect('timeout') { puts 'tick' }
+timer.start
+```
+
 ## Architecture
 
 1. `scripts/generate_bridge.rb` reads Qt API from system headers.
@@ -200,7 +211,7 @@ Everything generated/build-related is under `build/` and should stay out of git.
 - AST-driven generation with scope support: `QT_RUBY_SCOPE=widgets|qobject|all`
 - default compile path switched to `all` (`widgets + qobject`)
 - generated Qt inheritance in Ruby classes (including intermediate Qt wrappers)
-- Qt-native event/signal runtime wired to Ruby (`on`, `connect`, `disconnect`)
+- Qt-native event/signal runtime wired to Ruby at QObject level (`on`, `connect`, `disconnect`)
 - `QTimer` available in generated API with `connect('timeout')` support
 
 ### Next
