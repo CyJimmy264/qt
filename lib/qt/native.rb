@@ -13,6 +13,7 @@ module Qt
     COERCERS = {
       string: :to_s.to_proc,
       int: ->(value) { Integer(value) },
+      bool: ->(value) { !value.nil? && value != false },
       pointer: lambda { |value|
         return nil if value.nil?
 

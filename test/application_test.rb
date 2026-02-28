@@ -70,6 +70,22 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
+  def test_widget_visibility_uses_boolean_api
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      window = QWidget.new
+
+      window.set_visible(true)
+
+      assert window.is_visible
+
+      window.set_visible(false)
+
+      refute window.is_visible
+    end
+  end
+
   private
 
   def build_widget_layout_fixture

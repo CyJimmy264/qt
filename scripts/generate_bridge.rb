@@ -322,6 +322,8 @@ def cpp_null_handle_return(method)
   case method[:ffi_return]
   when :int
     '    return -1;'
+  when :bool
+    '    return false;'
   when :pointer, :string
     '    return nullptr;'
   else
@@ -585,6 +587,7 @@ end
 def optional_arg_replacement(arg, safe)
   case arg[:ffi]
   when :int then "(#{safe}.nil? ? 0 : #{safe})"
+  when :bool then "(#{safe}.nil? ? false : #{safe})"
   when :pointer then safe
   when :string
     return "(#{safe}.nil? ? '' : Qt::VariantCodec.encode(#{safe}))" if arg[:cast] == :qvariant_from_utf8

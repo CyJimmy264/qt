@@ -36,6 +36,7 @@ def ffi_to_cpp_type(ffi)
   when :pointer then 'void*'
   when :string then 'const char*'
   when :int then 'int'
+  when :bool then 'bool'
   else
     raise "Unsupported ffi type: #{ffi.inspect}"
   end
@@ -46,6 +47,7 @@ def ffi_return_to_cpp(ffi)
   when :void then 'void'
   when :pointer then 'void*'
   when :int then 'int'
+  when :bool then 'bool'
   when :string then 'const char*'
   else
     raise "Unsupported ffi return: #{ffi.inspect}"

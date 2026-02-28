@@ -16,7 +16,7 @@ end
 
 def map_builtin_intlike_arg_type(type_name)
   return { ffi: :int } if type_name == 'int'
-  return { ffi: :int, cast: 'bool' } if type_name == 'bool'
+  return { ffi: :bool } if type_name == 'bool'
 
   nil
 end
@@ -74,7 +74,8 @@ end
 
 def map_scalar_cpp_return_type(type)
   return { ffi_return: :void } if type == 'void'
-  return { ffi_return: :int } if %w[int bool].include?(type)
+  return { ffi_return: :int } if type == 'int'
+  return { ffi_return: :bool } if type == 'bool'
   return { ffi_return: :string, return_cast: :qstring_to_utf8 } if type == 'QString'
   return { ffi_return: :string, return_cast: :qvariant_to_utf8 } if type == 'QVariant'
 
