@@ -2,6 +2,7 @@ Metrics/AbcSize:
   Exclude:
     - 'scripts/generate_bridge/spec_discovery.rb'
     - 'scripts/generate_bridge/auto_methods.rb'
+    - 'test/event_runtime_test.rb'
 
 Metrics/CyclomaticComplexity:
   Exclude:
@@ -13,6 +14,7 @@ Metrics/MethodLength:
     - 'scripts/generate_bridge.rb'
     - 'scripts/generate_bridge/spec_discovery.rb'
     - 'scripts/generate_bridge/auto_methods.rb'
+    - 'test/event_runtime_test.rb'
 
 Metrics/PerceivedComplexity:
   Exclude:
@@ -22,3 +24,4 @@ Metrics/PerceivedComplexity:
 Metrics/ClassLength:
   Exclude:
     - 'test/style_bridge_test.rb'
+    - 'test/event_runtime_test.rb'

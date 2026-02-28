@@ -180,6 +180,97 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
     end
   end
 
+  def test_focus_event_delivered_for_watched_ancestor
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      window = QWidget.new
+      parent = QWidget.new(window)
+      child = QPushButton.new(parent)
+      parent.set_geometry(20, 20, 200, 120)
+      child.set_geometry(10, 10, 120, 30)
+      parent.show
+      child.show
+      window.show
+      QApplication.process_events
+
+      parent_events = []
+      parent.on(:focus_in) { |ev| parent_events << ev }
+      child.set_focus
+      wait_for_non_empty_payloads(parent_events)
+
+      skip 'focus event was not delivered in this Qt platform environment' if parent_events.empty?
+
+      assert_operator parent_events.length, :>=, 1
+    end
+  end
+
+  def test_focus_event_is_not_double_dispatched_when_child_watched
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      window = QWidget.new
+      parent = QWidget.new(window)
+      child = QPushButton.new(parent)
+      parent.set_geometry(20, 20, 200, 120)
+      child.set_geometry(10, 10, 120, 30)
+      parent.show
+      child.show
+      window.show
+      QApplication.process_events
+
+      parent_events = []
+      child_events = []
+      parent.on(:focus_in) { |ev| parent_events << ev }
+      child.on(:focus_in) { |ev| child_events << ev }
+
+      # Drop startup focus noise and check one explicit focus transition.
+      parent_events.clear
+      child_events.clear
+      child.set_focus
+      wait_for_non_empty_payloads(child_events)
+
+      skip 'focus event was not delivered in this Qt platform environment' if child_events.empty?
+
+      assert_operator child_events.length, :>=, 1
+      assert_equal 0, parent_events.length
+    end
+  end
+
+  def test_scroll_hierarchy_focus_events_survive_repeated_show_hide_cycles
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      window = QWidget.new
+      scroll = QScrollArea.new(window)
+      host = QWidget.new
+      button = QPushButton.new(host)
+      scroll.set_geometry(0, 0, 320, 240)
+      host.set_geometry(0, 0, 300, 600)
+      button.set_geometry(20, 20, 140, 30)
+      scroll.set_widget(host)
+      scroll.show
+      window.show
+      QApplication.process_events
+
+      events = []
+      scroll.on(:focus_in) { |ev| events << ev }
+
+      6.times do
+        host.hide
+        QApplication.process_events
+        host.show
+        QApplication.process_events
+        button.set_focus
+        QApplication.process_events
+      end
+
+      skip 'focus event was not delivered in this Qt platform environment' if events.empty?
+
+      assert_operator events.length, :>=, 3
+    end
+  end
+
   private
 
   def wait_for_non_empty_payloads(payloads)

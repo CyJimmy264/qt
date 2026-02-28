@@ -136,6 +136,7 @@ Generated Ruby API is intentionally close to Qt API, but follows universal bridg
   - `disconnect(signal = nil)` / alias `off_signal`
   - these helpers are mixed into generated `QObject` descendants (for example `QWidget`, `QPushButton`, `QTimer`)
   - non-`QObject` value classes (`QIcon`, `QPixmap`, `QImage`) intentionally do not expose `connect`/`on`
+  - event delivery is target-first with nearest watched ancestor fallback for interactive events (mouse/key/focus/enter/leave)
 - Introspection helpers are Ruby-layer helpers:
   - `q_inspect`, aliases `qt_inspect`, `to_h`
 - Top-level constant aliases are provided for convenience:
@@ -262,4 +263,10 @@ If Qt is in a custom prefix:
 
 ```bash
 export PKG_CONFIG_PATH="/path/to/qt/lib/pkgconfig:$PKG_CONFIG_PATH"
+```
+
+Native event-runtime debug logs:
+
+```bash
+QT_RUBY_EVENT_DEBUG=1 ruby your_app.rb
 ```
