@@ -223,7 +223,7 @@ def arg_expr(arg)
   case arg[:cast]
   when :qstring then "as_qstring(#{arg[:name]})"
   when :qany_string_view then "QAnyStringView(as_qstring(#{arg[:name]}))"
-  when :qvariant_from_utf8 then "QVariant(as_qstring(#{arg[:name]}))"
+  when :qvariant_from_utf8 then "qvariant_from_bridge_value(#{arg[:name]})"
   when :alignment then "static_cast<Qt::Alignment>(#{arg[:name]})"
   when String then "static_cast<#{arg[:cast]}>(#{arg[:name]})"
   else
@@ -347,6 +347,8 @@ def cpp_bridge_prelude
   <<~CPP
     #include <QByteArray>
     #include <QAnyStringView>
+    #include <QJsonDocument>
+    #include <QJsonParseError>
     #include <QString>
     #include <QVariant>
     #include "qt_ruby_runtime.hpp"
@@ -359,6 +361,91 @@ def cpp_bridge_prelude
       }
 
       return QString::fromUtf8(value);
+    }
+
+    QVariant qvariant_from_bridge_value(const char* value) {
+      const QString raw = as_qstring(value);
+      if (!raw.startsWith(QStringLiteral("qtv:"))) {
+        return QVariant(raw);
+      }
+
+      if (raw == QStringLiteral("qtv:nil")) {
+        return QVariant();
+      }
+
+      const int first_colon = raw.indexOf(':', 4);
+      if (first_colon < 0) {
+        return QVariant(raw);
+      }
+
+      const QString tag = raw.mid(4, first_colon - 4);
+      const QString payload = raw.mid(first_colon + 1);
+
+      if (tag == QStringLiteral("bool")) {
+        return QVariant(payload == QStringLiteral("1"));
+      }
+
+      if (tag == QStringLiteral("int")) {
+        bool ok = false;
+        const qlonglong parsed = payload.toLongLong(&ok);
+        return ok ? QVariant(parsed) : QVariant(raw);
+      }
+
+      if (tag == QStringLiteral("float")) {
+        bool ok = false;
+        const double parsed = payload.toDouble(&ok);
+        return ok ? QVariant(parsed) : QVariant(raw);
+      }
+
+      if (tag == QStringLiteral("str")) {
+        const QByteArray decoded = QByteArray::fromBase64(payload.toUtf8());
+        return QVariant(QString::fromUtf8(decoded));
+      }
+
+      if (tag == QStringLiteral("json")) {
+        const QByteArray decoded = QByteArray::fromBase64(payload.toUtf8());
+        QJsonParseError err{};
+        const QJsonDocument doc = QJsonDocument::fromJson(decoded, &err);
+        if (err.error == QJsonParseError::NoError) {
+          return doc.toVariant();
+        }
+      }
+
+      return QVariant(raw);
+    }
+
+    QString qvariant_to_bridge_string(const QVariant& value) {
+      if (!value.isValid() || value.isNull()) {
+        return QStringLiteral("qtv:nil");
+      }
+
+      switch (value.metaType().id()) {
+        case QMetaType::Bool:
+          return QStringLiteral("qtv:bool:") + (value.toBool() ? QStringLiteral("1") : QStringLiteral("0"));
+        case QMetaType::Int:
+        case QMetaType::UInt:
+        case QMetaType::LongLong:
+        case QMetaType::ULongLong:
+          return QStringLiteral("qtv:int:") + QString::number(value.toLongLong());
+        case QMetaType::Float:
+        case QMetaType::Double:
+          return QStringLiteral("qtv:float:") + QString::number(value.toDouble(), 'g', 17);
+        case QMetaType::QString: {
+          const QByteArray b64 = value.toString().toUtf8().toBase64();
+          return QStringLiteral("qtv:str:") + QString::fromUtf8(b64);
+        }
+        default:
+          break;
+      }
+
+      const QJsonDocument doc = QJsonDocument::fromVariant(value);
+      if (!doc.isNull()) {
+        const QByteArray b64 = doc.toJson(QJsonDocument::Compact).toBase64();
+        return QStringLiteral("qtv:json:") + QString::fromUtf8(b64);
+      }
+
+      const QByteArray fallback = value.toString().toUtf8().toBase64();
+      return QStringLiteral("qtv:str:") + QString::fromUtf8(fallback);
     }
     }  // namespace
 
@@ -466,20 +553,31 @@ def optional_arg_replacement(arg, safe)
   case arg[:ffi]
   when :int then "(#{safe}.nil? ? 0 : #{safe})"
   when :pointer then safe
+  when :string
+    return "(#{safe}.nil? ? '' : Qt::VariantCodec.encode(#{safe}))" if arg[:cast] == :qvariant_from_utf8
+
+    "(#{safe}.nil? ? '' : #{safe})"
   else "(#{safe}.nil? ? '' : #{safe})"
   end
+end
+
+def ruby_arg_call_value(arg, safe, optional:)
+  return "Qt::VariantCodec.encode(#{safe})" if arg[:cast] == :qvariant_from_utf8 && !optional
+
+  optional ? optional_arg_replacement(arg, safe) : safe
 end
 
 def rewrite_native_call_args(native_call, method, arg_map, required_arg_count)
   rewritten_native_call = native_call
   method[:args].each_with_index do |arg, idx|
     safe = arg_map[arg[:name]]
-    replacement = idx >= required_arg_count ? optional_arg_replacement(arg, safe) : safe
+    replacement = ruby_arg_call_value(arg, safe, optional: idx >= required_arg_count)
     rewritten_native_call = rewritten_native_call.gsub(/\b#{Regexp.escape(arg[:name])}\b/, replacement)
   end
   rewritten_native_call
 end
 
+# rubocop:disable Metrics/MethodLength
 def append_ruby_native_call_method(lines, method:, native_call:, indent:)
   ruby_name = ruby_safe_method_name(method[:ruby_name])
   snake_alias = to_snake(ruby_name)
@@ -487,11 +585,19 @@ def append_ruby_native_call_method(lines, method:, native_call:, indent:)
   required_arg_count = method.fetch(:required_arg_count, method[:args].length)
   ruby_args = ruby_method_arguments(method, arg_map, required_arg_count)
   rewritten_native_call = rewrite_native_call_args(native_call, method, arg_map, required_arg_count)
+  method_body = ruby_native_method_body(method, rewritten_native_call)
 
   lines << "#{indent}def #{ruby_name}(#{ruby_args})"
-  lines << "#{indent}  #{rewritten_native_call}"
+  lines << "#{indent}  #{method_body}"
   lines << "#{indent}end"
   lines << "#{indent}alias_method :#{snake_alias}, :#{ruby_name}" if snake_alias != ruby_name
+end
+# rubocop:enable Metrics/MethodLength
+
+def ruby_native_method_body(method, rewritten_native_call)
+  return "Qt::VariantCodec.decode(#{rewritten_native_call})" if method[:return_cast] == :qvariant_to_utf8
+
+  rewritten_native_call
 end
 
 def append_ruby_property_writer(lines, method:, indent:)

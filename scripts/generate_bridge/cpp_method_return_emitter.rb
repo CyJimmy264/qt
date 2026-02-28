@@ -43,7 +43,7 @@ class CppMethodReturnEmitter
   def emit_qvariant
     lines << "  const QVariant value = #{invocation};"
     lines << '  thread_local QByteArray utf8;'
-    lines << '  utf8 = value.toString().toUtf8();'
+    lines << '  utf8 = qvariant_to_bridge_string(value).toUtf8();'
     lines << '  return utf8.constData();'
   end
 

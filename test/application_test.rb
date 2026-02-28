@@ -2,6 +2,7 @@
 
 require_relative 'test_helper'
 
+# rubocop:disable Metrics/ClassLength
 class QtBindingsTest < Minitest::Test
   def test_version_present
     refute_nil Qt::VERSION
@@ -70,7 +71,8 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
-  def test_qss_object_name_and_dynamic_property_smoke
+  # rubocop:disable Metrics/MethodLength
+  def test_qss_selector_matches_after_object_name_change
     skip 'native bridge is not available' unless Qt::Native.available?
 
     with_qapplication do
@@ -80,25 +82,68 @@ class QtBindingsTest < Minitest::Test
 
       window.set_style_sheet('QPushButton#start_button { qproperty-text: "ID matched"; }')
       show_and_process_events(window)
+
       refute_equal 'ID matched', button.text
 
       button.object_name = 'start_button'
       window.set_style_sheet(window.style_sheet)
       show_and_process_events(window)
-      assert_equal 'ID matched', button.text
 
+      assert_equal 'ID matched', button.text
+    end
+  end
+  # rubocop:enable Metrics/MethodLength
+
+  # rubocop:disable Metrics/AbcSize,Metrics/MethodLength
+  def test_qss_selector_matches_dynamic_property
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      window = QWidget.new
+      button = QPushButton.new(window)
       button.set_text('Base2')
       window.set_style_sheet('QPushButton[role="primary"] { qproperty-text: "Role matched"; }')
       show_and_process_events(window)
+
       refute_equal 'Role matched', button.text
 
       button.set_property('role', 'primary')
+
       assert_equal 'primary', button.property('role')
+
       window.set_style_sheet(window.style_sheet)
       show_and_process_events(window)
+
       assert_equal 'Role matched', button.text
     end
   end
+  # rubocop:enable Metrics/AbcSize,Metrics/MethodLength
+
+  # rubocop:disable Metrics/AbcSize,Metrics/MethodLength,Minitest/MultipleAssertions
+  def test_dynamic_property_roundtrip_typed_values
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      window = QWidget.new
+      button = QPushButton.new(window)
+      button.show
+      window.show
+      QApplication.process_events
+
+      button.set_property('flag', true)
+      button.set_property('count', 42)
+      button.set_property('ratio', 1.5)
+      button.set_property('list_payload', [1, 'x'])
+      button.set_property('map_payload', { 'k' => 1, 's' => 'v' })
+
+      assert button.property('flag')
+      assert_equal 42, button.property('count')
+      assert_in_delta 1.5, button.property('ratio'), 0.0001
+      assert_equal [1, 'x'], button.property('list_payload')
+      assert_equal({ 'k' => 1, 's' => 'v' }, button.property('map_payload'))
+    end
+  end
+  # rubocop:enable Metrics/AbcSize,Metrics/MethodLength,Minitest/MultipleAssertions
 
   private
 
@@ -134,3 +179,4 @@ class QtBindingsTest < Minitest::Test
     QApplication.process_events
   end
 end
+# rubocop:enable Metrics/ClassLength
