@@ -41,6 +41,17 @@ bool event_debug_enabled() {
   return enabled;
 }
 
+bool ancestor_mouse_move_enabled() {
+  static const bool enabled = [] {
+    const char* raw = std::getenv("QT_RUBY_EVENT_ANCESTOR_MOUSE_MOVE");
+    if (!raw) {
+      return false;
+    }
+    return raw[0] != '\0' && raw[0] != '0';
+  }();
+  return enabled;
+}
+
 const char* event_name(int et) {
   switch (static_cast<QEvent::Type>(et)) {
     case QEvent::MouseButtonPress:
@@ -98,7 +109,9 @@ bool supports_ancestor_dispatch(int event_type) {
   switch (static_cast<QEvent::Type>(event_type)) {
     case QEvent::MouseButtonPress:
     case QEvent::MouseButtonRelease:
+      return true;
     case QEvent::MouseMove:
+      return ancestor_mouse_move_enabled();
     case QEvent::KeyPress:
     case QEvent::KeyRelease:
     case QEvent::FocusIn:
@@ -147,6 +160,10 @@ void ensure_cleanup_hook(QObject* obj) {
 class EventFilter : public QObject {
  protected:
   bool eventFilter(QObject* watched, QEvent* event) override {
+    if (watched_events().empty()) {
+      return QObject::eventFilter(watched, event);
+    }
+
     const int et = static_cast<int>(event->type());
     QObject* dispatch_target = resolve_dispatch_target(watched, et);
     if (!dispatch_target) {

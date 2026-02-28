@@ -270,3 +270,10 @@ Native event-runtime debug logs:
 ```bash
 QT_RUBY_EVENT_DEBUG=1 ruby your_app.rb
 ```
+
+Optional tuning:
+
+```bash
+# enable ancestor fallback for MouseMove events (off by default)
+QT_RUBY_EVENT_ANCESTOR_MOUSE_MOVE=1 ruby your_app.rb
+```
