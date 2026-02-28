@@ -3,6 +3,12 @@
 require_relative 'test_helper'
 
 class QtStyleBridgeTest < Minitest::Test
+  def test_qt_top_level_aliases_for_value_classes
+    assert Object.const_defined?(:QIcon, false)
+    assert Object.const_defined?(:QPixmap, false)
+    assert Object.const_defined?(:QImage, false)
+  end
+
   def test_qss_selector_matches_after_object_name_change
     skip 'native bridge is not available' unless Qt::Native.available?
 

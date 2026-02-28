@@ -31,21 +31,11 @@ require GENERATED_WIDGETS
 module Qt
 end
 
-{
-  QApplication: :QApplication,
-  QWidget: :QWidget,
-  QLabel: :QLabel,
-  QPushButton: :QPushButton,
-  QLineEdit: :QLineEdit,
-  QVBoxLayout: :QVBoxLayout,
-  QTableWidget: :QTableWidget,
-  QTableWidgetItem: :QTableWidgetItem,
-  QScrollArea: :QScrollArea,
-  QTimer: :QTimer,
-  QIcon: :QIcon
-}.each do |top_level, qt_const|
-  next unless Qt.const_defined?(qt_const, false)
-  next if Object.const_defined?(top_level, false)
+Qt.constants(false)
+  .grep(/\AQ[A-Z]\w*\z/)
+  .sort
+  .each do |qt_const|
+    next if Object.const_defined?(qt_const, false)
 
-  Object.const_set(top_level, Qt.const_get(qt_const))
-end
+    Object.const_set(qt_const, Qt.const_get(qt_const))
+  end
