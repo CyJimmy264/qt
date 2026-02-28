@@ -98,6 +98,26 @@ class QtEventRuntimeApiTest < Minitest::Test
     end
   end
 
+  def test_qtimer_supports_qobject_signal_subscription
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      timer = QTimer.new
+
+      assert_equal timer, timer.connect('timeout') { |_payload| nil }
+      assert_equal timer, timer.disconnect('timeout')
+    end
+  end
+
+  def test_qicon_does_not_expose_qobject_signal_helpers
+    skip 'QIcon is not available in this generated scope' unless Qt.const_defined?(:QIcon)
+
+    icon = QIcon.new('')
+
+    refute_respond_to icon, :connect
+    refute_respond_to icon, :on
+  end
+
   def test_widget_subscription_validation
     skip 'native bridge is not available' unless Qt::Native.available?
 

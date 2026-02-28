@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# Widget-level event/signal helper methods mixed into generated classes.
+# QObject-level event/signal helper methods mixed into generated classes.
 module Qt
   module EventRuntime
-    # Widget-level event/signal helper methods mixed into generated classes.
-    module WidgetMethods
+    # QObject-level event/signal helper methods mixed into generated classes.
+    module QObjectMethods
       def on(event_name, &block)
         raise ArgumentError, 'pass block to on' unless block
 
@@ -34,5 +34,8 @@ module Qt
       end
       alias off_signal disconnect
     end
+
+    # Backward-compatible alias for already-generated code.
+    WidgetMethods = QObjectMethods
   end
 end

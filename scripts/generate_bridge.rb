@@ -98,6 +98,18 @@ def widget_based_qt_class?(qt_class, super_qt_by_qt)
   false
 end
 
+def qobject_based_qt_class?(qt_class, super_qt_by_qt)
+  return true if qt_class == 'QObject'
+
+  cur = qt_class
+  while (sup = super_qt_by_qt[cur])
+    return true if sup == 'QObject'
+
+    cur = sup
+  end
+  false
+end
+
 def inherited_methods_for_spec(spec, specs_by_qt, super_qt_by_qt)
   inherited = []
   cur = spec[:qt_class]
@@ -732,7 +744,9 @@ def append_ruby_qapplication_class_method(lines, method)
   lines << "      alias_method :#{snake_alias}, :#{ruby_name}" if snake_alias != ruby_name
 end
 
-def generate_ruby_widget_class_header(lines, spec, metadata:, super_ruby:, widget_root:)
+def generate_ruby_widget_class_header(lines, spec, metadata:, super_ruby:, class_flags:)
+  widget_root = class_flags[:widget_root]
+  qobject_based = class_flags[:qobject_based]
   class_decl = super_ruby ? "  class #{spec[:ruby_class]} < #{super_ruby}" : "  class #{spec[:ruby_class]}"
   lines << class_decl
   append_ruby_class_api_constants(lines, qt_class: spec[:qt_class], metadata: metadata, indent: '    ')
@@ -741,7 +755,7 @@ def generate_ruby_widget_class_header(lines, spec, metadata:, super_ruby:, widge
   lines << '    attr_reader :children' if widget_root
   lines << '    include Inspectable'
   lines << '    include ChildrenTracking' if widget_root
-  lines << '    include EventRuntime::WidgetMethods'
+  lines << '    include EventRuntime::QObjectMethods' if qobject_based
   lines << ''
 end
 
@@ -759,8 +773,15 @@ def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_r
   metadata = ruby_api_metadata_for_spec(spec, specs_by_qt, super_qt_by_qt)
   super_ruby = ruby_super_class_for_spec(spec, super_qt_by_qt, qt_to_ruby)
   widget_root = spec[:ruby_class] == 'QWidget'
+  qobject_based = qobject_based_qt_class?(spec[:qt_class], super_qt_by_qt)
 
-  generate_ruby_widget_class_header(lines, spec, metadata: metadata, super_ruby: super_ruby, widget_root: widget_root)
+  generate_ruby_widget_class_header(
+    lines,
+    spec,
+    metadata: metadata,
+    super_ruby: super_ruby,
+    class_flags: { widget_root: widget_root, qobject_based: qobject_based }
+  )
   append_widget_initializer(lines, spec: spec, widget_root: widget_root, indent: '    ')
   lines << ''
   append_ruby_widget_methods(lines, spec)
