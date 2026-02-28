@@ -11,6 +11,7 @@ class CppMethodReturnEmitter
   def emit
     return emit_void if method[:ffi_return] == :void
     return emit_qstring if qstring_return?
+    return emit_qvariant if qvariant_return?
     return emit_pointer if method[:ffi_return] == :pointer
 
     emit_value
@@ -24,6 +25,10 @@ class CppMethodReturnEmitter
     method[:ffi_return] == :string && method[:return_cast] == :qstring_to_utf8
   end
 
+  def qvariant_return?
+    method[:ffi_return] == :string && method[:return_cast] == :qvariant_to_utf8
+  end
+
   def emit_void
     lines << "  #{invocation};"
   end
@@ -32,6 +37,13 @@ class CppMethodReturnEmitter
     lines << "  const QString value = #{invocation};"
     lines << '  thread_local QByteArray utf8;'
     lines << '  utf8 = value.toUtf8();'
+    lines << '  return utf8.constData();'
+  end
+
+  def emit_qvariant
+    lines << "  const QVariant value = #{invocation};"
+    lines << '  thread_local QByteArray utf8;'
+    lines << '  utf8 = value.toString().toUtf8();'
     lines << '  return utf8.constData();'
   end
 

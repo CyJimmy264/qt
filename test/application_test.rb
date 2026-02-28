@@ -70,6 +70,36 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
+  def test_qss_object_name_and_dynamic_property_smoke
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      window = QWidget.new
+      button = QPushButton.new(window)
+      button.set_text('Base')
+
+      window.set_style_sheet('QPushButton#start_button { qproperty-text: "ID matched"; }')
+      show_and_process_events(window)
+      refute_equal 'ID matched', button.text
+
+      button.object_name = 'start_button'
+      window.set_style_sheet(window.style_sheet)
+      show_and_process_events(window)
+      assert_equal 'ID matched', button.text
+
+      button.set_text('Base2')
+      window.set_style_sheet('QPushButton[role="primary"] { qproperty-text: "Role matched"; }')
+      show_and_process_events(window)
+      refute_equal 'Role matched', button.text
+
+      button.set_property('role', 'primary')
+      assert_equal 'primary', button.property('role')
+      window.set_style_sheet(window.style_sheet)
+      show_and_process_events(window)
+      assert_equal 'Role matched', button.text
+    end
+  end
+
   private
 
   def build_widget_layout_fixture
@@ -97,5 +127,10 @@ class QtBindingsTest < Minitest::Test
     yield(app)
   ensure
     app&.dispose
+  end
+
+  def show_and_process_events(widget)
+    widget.show
+    QApplication.process_events
   end
 end

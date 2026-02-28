@@ -222,6 +222,8 @@ end
 def arg_expr(arg)
   case arg[:cast]
   when :qstring then "as_qstring(#{arg[:name]})"
+  when :qany_string_view then "QAnyStringView(as_qstring(#{arg[:name]}))"
+  when :qvariant_from_utf8 then "QVariant(as_qstring(#{arg[:name]}))"
   when :alignment then "static_cast<Qt::Alignment>(#{arg[:name]})"
   when String then "static_cast<#{arg[:cast]}>(#{arg[:name]})"
   else
@@ -344,7 +346,9 @@ end
 def cpp_bridge_prelude
   <<~CPP
     #include <QByteArray>
+    #include <QAnyStringView>
     #include <QString>
+    #include <QVariant>
     #include "qt_ruby_runtime.hpp"
 
     namespace {
