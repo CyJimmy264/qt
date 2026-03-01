@@ -129,7 +129,7 @@ def qversion_free_function_spec(ast)
     cpp_return: 'const char*',
     cpp_args: '',
     cpp_body: ['return qVersion();'],
-    qapplication_method: { ruby_name: 'qtVersion', native: 'qt_version', args: [] }
+    qapplication_method: { ruby_name: 'qtVersion', native: 'qt_version', args: [], return_cast: :qstring_to_utf8 }
   }
 end
 

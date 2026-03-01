@@ -11,7 +11,13 @@ module Qt
     DIRECT_ENCODERS = {
       Integer => ->(v) { ['int', v.to_s] },
       Float => ->(v) { ['float', v.to_s] },
-      String => ->(v) { ['str', base64_encode(v)] }
+      String => lambda { |v|
+        if StringCodec.binary_bytes?(v)
+          ['ba', base64_encode(v)]
+        else
+          ['str', base64_encode(StringCodec.to_qt_text(v))]
+        end
+      }
     }.freeze
     JSON_ENCODABLE_CLASSES = [Array, Hash].freeze
 
@@ -45,8 +51,9 @@ module Qt
       when 'bool' then payload == '1'
       when 'int' then Integer(payload, 10)
       when 'float' then Float(payload)
-      when 'str' then base64_decode(payload)
-      when 'json' then JSON.parse(base64_decode(payload))
+      when 'str' then StringCodec.from_qt_text(base64_decode(payload))
+      when 'ba' then base64_decode(payload).b
+      when 'json' then JSON.parse(StringCodec.from_qt_text(base64_decode(payload)))
       else raw
       end
     end

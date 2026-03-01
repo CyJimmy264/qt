@@ -271,6 +271,48 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
     end
   end
 
+  def test_signal_payload_is_normalized_to_utf8
+    ptr = FFI::Pointer.new(0x2222)
+    captured = []
+
+    handlers = {
+      ptr.address => {
+        'textChanged(QString)' => { index: 7, blocks: [->(payload) { captured << payload }] }
+      }
+    }
+    Qt::EventRuntime.instance_variable_set(:@signal_handlers, handlers)
+    Qt::EventRuntime.ensure_signal_callback!
+    callback = Qt::EventRuntime.instance_variable_get(:@signal_callback)
+
+    callback.call(ptr, 7, "Привет".b)
+
+    assert_equal 1, captured.length
+    assert_equal Encoding::UTF_8, captured.first.encoding
+    assert_equal 'Привет', captured.first
+  end
+
+  def test_signal_payload_invalid_bytes_are_replaced
+    ptr = FFI::Pointer.new(0x3333)
+    captured = []
+
+    handlers = {
+      ptr.address => {
+        'textChanged(QString)' => { index: 8, blocks: [->(payload) { captured << payload }] }
+      }
+    }
+    Qt::EventRuntime.instance_variable_set(:@signal_handlers, handlers)
+    Qt::EventRuntime.ensure_signal_callback!
+    callback = Qt::EventRuntime.instance_variable_get(:@signal_callback)
+
+    callback.call(ptr, 8, "\xFF\xFEok".b)
+
+    assert_equal 1, captured.length
+    assert_equal Encoding::UTF_8, captured.first.encoding
+    assert captured.first.valid_encoding?
+    assert_includes captured.first, 'ok'
+    assert_includes captured.first, "\uFFFD"
+  end
+
   private
 
   def wait_for_non_empty_payloads(payloads)

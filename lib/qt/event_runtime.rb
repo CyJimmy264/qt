@@ -107,7 +107,8 @@ module Qt
       return if @signal_callback
 
       @signal_callback = FFI::Function.new(:void, %i[pointer int string]) do |object_handle, signal_index, payload|
-        EventRuntimeDispatch.dispatch_signal(@signal_handlers, object_handle, signal_index, payload)
+        normalized_payload = payload.nil? ? nil : Qt::StringCodec.from_qt_text(payload)
+        EventRuntimeDispatch.dispatch_signal(@signal_handlers, object_handle, signal_index, normalized_payload)
       end
 
       Qt::Native.set_signal_callback(@signal_callback)

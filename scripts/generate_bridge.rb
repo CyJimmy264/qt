@@ -560,6 +560,7 @@ def optional_arg_replacement(arg, safe)
   when :pointer then safe
   when :string
     return "(#{safe}.nil? ? '' : Qt::VariantCodec.encode(#{safe}))" if arg[:cast] == :qvariant_from_utf8
+    return "(#{safe}.nil? ? '' : Qt::StringCodec.to_qt_text(#{safe}))" if text_bridge_arg?(arg)
 
     "(#{safe}.nil? ? '' : #{safe})"
   else "(#{safe}.nil? ? '' : #{safe})"
@@ -567,9 +568,14 @@ def optional_arg_replacement(arg, safe)
 end
 
 def ruby_arg_call_value(arg, safe, optional:)
+  return "Qt::StringCodec.to_qt_text(#{safe})" if text_bridge_arg?(arg) && !optional
   return "Qt::VariantCodec.encode(#{safe})" if arg[:cast] == :qvariant_from_utf8 && !optional
 
   optional ? optional_arg_replacement(arg, safe) : safe
+end
+
+def text_bridge_arg?(arg)
+  arg[:ffi] == :string && %i[qstring qany_string_view].include?(arg[:cast])
 end
 
 def rewrite_native_call_args(native_call, method, arg_map, required_arg_count)
@@ -598,6 +604,7 @@ def append_ruby_native_call_method(lines, method:, native_call:, indent:)
 end
 
 def ruby_native_method_body(method, rewritten_native_call)
+  return "Qt::StringCodec.from_qt_text(#{rewritten_native_call})" if method[:return_cast] == :qstring_to_utf8
   return "Qt::VariantCodec.decode(#{rewritten_native_call})" if method[:return_cast] == :qvariant_to_utf8
 
   rewritten_native_call
@@ -640,7 +647,7 @@ end
 
 def append_string_path_initializer(lines, spec, indent)
   lines << "#{indent}def initialize(path = nil)"
-  lines << "#{indent}  @handle = Native.#{spec[:prefix]}_new(path.to_s)"
+  lines << "#{indent}  @handle = Native.#{spec[:prefix]}_new(Qt::StringCodec.to_qt_text(path))"
 end
 
 def append_parent_registration_logic(lines, spec, indent)
@@ -711,9 +718,19 @@ def append_ruby_qapplication_class_method(lines, method)
 
   lines << ''
   lines << "      def #{ruby_name}(#{args})"
-  lines << (method[:native] ? "        Native.#{method[:native]}#{call_suffix}" : '        nil')
+  lines << if method[:native]
+             qapplication_class_method_body(method, "Native.#{method[:native]}#{call_suffix}")
+           else
+             '        nil'
+           end
   lines << '      end'
   lines << "      alias_method :#{snake_alias}, :#{ruby_name}" if snake_alias != ruby_name
+end
+
+def qapplication_class_method_body(method, native_call)
+  return "        Qt::StringCodec.from_qt_text(#{native_call})" if method[:return_cast] == :qstring_to_utf8
+
+  "        #{native_call}"
 end
 
 def generate_ruby_widget_class_header(lines, spec, metadata:, super_ruby:, class_flags:)

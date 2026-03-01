@@ -75,6 +75,50 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
+  def test_qlineedit_text_roundtrip_utf8_cyrillic
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      input = QLineEdit.new
+      input.set_text('Привет, мир')
+
+      value = input.text
+      assert_equal Encoding::UTF_8, value.encoding
+      assert_equal 'Привет, мир', value
+    end
+  end
+
+  def test_qlineedit_accepts_ascii_8bit_with_valid_utf8_bytes
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      source = 'Привет'.dup.encode(Encoding::UTF_8).b
+      assert_equal Encoding::ASCII_8BIT, source.encoding
+
+      input = QLineEdit.new
+      input.set_text(source)
+
+      value = input.text
+      assert_equal Encoding::UTF_8, value.encoding
+      assert_equal 'Привет', value
+    end
+  end
+
+  def test_qlineedit_invalid_bytes_do_not_crash_and_are_replaced
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      input = QLineEdit.new
+      input.set_text("\xFF\xFEtask".b)
+
+      value = input.text
+      assert_equal Encoding::UTF_8, value.encoding
+      assert value.valid_encoding?
+      assert_includes value, 'task'
+      assert_includes value, "\uFFFD"
+    end
+  end
+
   def test_qwidget_and_qlabel_inspection_aliases
     skip 'native bridge is not available' unless Qt::Native.available?
 

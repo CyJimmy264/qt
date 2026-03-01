@@ -17,6 +17,7 @@ end
 require_relative 'qt/version'
 require_relative 'qt/errors'
 require_relative 'qt/constants'
+require_relative 'qt/string_codec'
 require_relative 'qt/variant_codec'
 require_relative 'qt/inspectable'
 require_relative 'qt/children_tracking'
