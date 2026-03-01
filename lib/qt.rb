@@ -7,8 +7,9 @@ GENERATOR = File.join(ROOT, 'scripts', 'generate_bridge.rb')
 GENERATED_DIR = File.join(ROOT, 'build', 'generated')
 GENERATED_WIDGETS = File.join(GENERATED_DIR, 'widgets.rb')
 GENERATED_API = File.join(GENERATED_DIR, 'bridge_api.rb')
+GENERATED_CONSTANTS = File.join(GENERATED_DIR, 'constants.rb')
 
-unless File.exist?(GENERATED_WIDGETS) && File.exist?(GENERATED_API)
+unless File.exist?(GENERATED_WIDGETS) && File.exist?(GENERATED_API) && File.exist?(GENERATED_CONSTANTS)
   ok = system(RbConfig.ruby, GENERATOR)
   raise 'Failed to generate Qt Ruby bindings. Run: bundle exec rake compile' unless ok
 end

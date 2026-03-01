@@ -11,6 +11,7 @@ GENERATED_DIR = File.join(BUILD_DIR, 'generated')
 CPP_PATH = File.join(GENERATED_DIR, 'qt_ruby_bridge.cpp')
 API_PATH = File.join(GENERATED_DIR, 'bridge_api.rb')
 RUBY_WIDGETS_PATH = File.join(GENERATED_DIR, 'widgets.rb')
+RUBY_CONSTANTS_PATH = File.join(GENERATED_DIR, 'constants.rb')
 
 # Universal generation policy: class set is discovered from AST per scope.
 GENERATOR_SCOPE = (ENV['QT_RUBY_SCOPE'] || 'all').freeze
@@ -859,6 +860,81 @@ def generate_ruby_widgets(specs, super_qt_by_qt, wrapper_qt_classes)
   "#{lines.join("\n")}\n"
 end
 
+def ast_extract_first_value(node)
+  return nil unless node.is_a?(Hash)
+
+  value = node['value']
+  return value if value && !value.to_s.empty?
+
+  Array(node['inner']).each do |child|
+    nested = ast_extract_first_value(child)
+    return nested if nested
+  end
+  nil
+end
+
+def parse_ast_integer_value(raw)
+  return nil if raw.nil?
+
+  text = raw.to_s.strip
+  return nil if text.empty?
+
+  text = text.delete("'")
+  text = text.gsub(/([0-9A-Fa-fxX]+)(?:[uUlL]+)\z/, '\1')
+  Integer(text, 0)
+rescue ArgumentError
+  nil
+end
+
+def collect_enum_constants_for_scope(ast, target_scope)
+  constants = {}
+
+  walk_ast_scoped(ast) do |node, scope|
+    next unless node['kind'] == 'EnumDecl'
+    next unless scope == target_scope
+
+    Array(node['inner']).each do |entry|
+      next unless entry['kind'] == 'EnumConstantDecl'
+
+      name = entry['name'].to_s
+      next unless name.match?(/\A[A-Z][A-Za-z0-9_]*\z/)
+      next if constants.key?(name)
+
+      raw_value = ast_extract_first_value(entry)
+      value = parse_ast_integer_value(raw_value)
+      next if value.nil?
+
+      constants[name] = value
+    end
+  end
+
+  constants
+end
+
+def collect_qt_namespace_enum_constants(ast)
+  constants = collect_enum_constants_for_scope(ast, ['Qt'])
+  collect_enum_constants_for_scope(ast, ['QEvent']).each do |name, value|
+    alias_name = "Event#{name}"
+    next unless alias_name.match?(/\A[A-Z][A-Za-z0-9_]*\z/)
+    next if constants.key?(alias_name)
+
+    constants[alias_name] = value
+  end
+  constants
+end
+
+def generate_ruby_constants(ast)
+  constants = collect_qt_namespace_enum_constants(ast)
+  lines = ['# frozen_string_literal: true', '', 'module Qt']
+
+  constants.sort.each do |name, value|
+    lines << "  #{name} = #{value} unless const_defined?(:#{name}, false)"
+  end
+
+  lines << 'end'
+  "#{lines.join("\n")}\n"
+end
+
 total_start = monotonic_now
 ast = timed('ast_dump_total') { ast_dump }
 base_specs = timed('build_base_specs') { build_base_specs(ast) }
@@ -877,6 +953,10 @@ timed('write_bridge_api') do
   FileUtils.mkdir_p(File.dirname(API_PATH))
   File.write(API_PATH, generate_bridge_api(effective_specs))
 end
+timed('write_ruby_constants') do
+  FileUtils.mkdir_p(File.dirname(RUBY_CONSTANTS_PATH))
+  File.write(RUBY_CONSTANTS_PATH, generate_ruby_constants(ast))
+end
 timed('write_ruby_widgets') do
   FileUtils.mkdir_p(File.dirname(RUBY_WIDGETS_PATH))
   File.write(RUBY_WIDGETS_PATH, generate_ruby_widgets(effective_specs, super_qt_by_qt, wrapper_qt_classes))
@@ -885,4 +965,5 @@ debug_log("total=#{format('%.3fs', monotonic_now - total_start)}")
 
 puts "Generated #{CPP_PATH}"
 puts "Generated #{API_PATH}"
+puts "Generated #{RUBY_CONSTANTS_PATH}"
 puts "Generated #{RUBY_WIDGETS_PATH}"
