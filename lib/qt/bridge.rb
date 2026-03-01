@@ -35,10 +35,12 @@ module Qt
         ext = RbConfig::CONFIG['DLEXT']
         root = File.expand_path('../..', __dir__)
         load_path_candidates = load_path_library_candidates(ext)
+        gem_extension_candidates = gem_extension_library_candidates(ext)
 
         [
           File.join(root, 'build', 'qt', "qt_ruby_bridge.#{ext}"),
           File.join(root, 'lib', 'qt', "qt_ruby_bridge.#{ext}"),
+          *gem_extension_candidates,
           *load_path_candidates,
           'qt_ruby_bridge'
         ].uniq
@@ -52,6 +54,19 @@ module Qt
           File.join(entry, "qt_ruby_bridge.#{ext}")
         ]
       end
+    end
+
+    def gem_extension_library_candidates(ext)
+      spec = Gem::Specification.find_by_name('qt')
+      extension_dir = spec&.extension_dir
+      return [] if extension_dir.nil? || extension_dir.empty?
+
+      [
+        File.join(extension_dir, 'qt', "qt_ruby_bridge.#{ext}"),
+        File.join(extension_dir, "qt_ruby_bridge.#{ext}")
+      ]
+    rescue Gem::LoadError
+      []
     end
 
     def attach_api
