@@ -249,10 +249,15 @@ def arg_expr(arg)
 end
 
 def emit_cpp_qapplication_constructor(lines, name)
-  lines << "extern \"C\" void* #{name}() {"
+  lines << "extern \"C\" void* #{name}(const char* argv0) {"
   lines << '  static int argc = 1;'
-  lines << '  static char arg0[] = "qt-ruby";'
-  lines << '  static char* argv[] = {arg0, nullptr};'
+  lines << '  static QByteArray arg0_storage;'
+  lines << '  static char* argv[] = {nullptr, nullptr};'
+  lines << '  arg0_storage = QByteArray(argv0 ? argv0 : "ruby");'
+  lines << '  if (arg0_storage.isEmpty()) {'
+  lines << '    arg0_storage = QByteArray("ruby");'
+  lines << '  }'
+  lines << '  argv[0] = arg0_storage.data();'
   lines << '  return new QApplication(argc, argv);'
   lines << '}'
 end
@@ -699,14 +704,24 @@ def generate_ruby_qapplication(lines, spec)
 end
 
 def qapplication_method_arguments(method)
-  arg_hashes = Array(method[:args]).map { |name| { name: name } }
+  arg_hashes = Array(method[:args]).each_with_index.map { |arg, idx| qapplication_arg_spec(arg, idx) }
   arg_map = ruby_arg_name_map(arg_hashes)
   rendered_args = arg_hashes.map { |arg| arg_map[arg[:name]] }.join(', ')
   [arg_hashes, arg_map, rendered_args]
 end
 
-def qapplication_method_call_suffix(arg_hashes, arg_map)
-  native_args = arg_hashes.map { |arg| arg_map[arg[:name]] }.join(', ')
+def qapplication_arg_spec(arg, idx)
+  return arg.transform_keys(&:to_sym) if arg.is_a?(Hash)
+
+  { name: (arg || "arg#{idx + 1}").to_sym }
+end
+
+def qapplication_method_call_suffix(arg_hashes, arg_map, method)
+  required_arg_count = method.fetch(:required_arg_count, arg_hashes.length)
+  native_args = arg_hashes.each_with_index.map do |arg, idx|
+    safe = arg_map[arg[:name]]
+    ruby_arg_call_value(arg, safe, optional: idx >= required_arg_count)
+  end.join(', ')
   native_args.empty? ? '' : "(#{native_args})"
 end
 
@@ -714,7 +729,7 @@ def append_ruby_qapplication_class_method(lines, method)
   ruby_name = ruby_safe_method_name(method[:ruby_name])
   snake_alias = to_snake(ruby_name)
   method_arg_hashes, arg_map, args = qapplication_method_arguments(method)
-  call_suffix = qapplication_method_call_suffix(method_arg_hashes, arg_map)
+  call_suffix = qapplication_method_call_suffix(method_arg_hashes, arg_map, method)
 
   lines << ''
   lines << "      def #{ruby_name}(#{args})"

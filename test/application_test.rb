@@ -39,6 +39,22 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
+  def test_qapplication_identity_setters_roundtrip
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      QApplication.set_application_name('QTimetrap')
+      QApplication.set_application_display_name('QTimetrap UI')
+      QApplication.set_organization_name('mveynberg')
+      QApplication.set_desktop_file_name('qtimetrap.desktop')
+
+      assert_equal 'QTimetrap', QApplication.application_name
+      assert_equal 'QTimetrap UI', QApplication.application_display_name
+      assert_equal 'mveynberg', QApplication.organization_name
+      assert_includes ['qtimetrap.desktop', 'qtimetrap'], QApplication.desktop_file_name
+    end
+  end
+
   def test_qapplication_keyboard_modifiers_manual_ctrl_shift_smoke
     skip 'native bridge is not available' unless Qt::Native.available?
     skip 'manual smoke; set QT_RUBY_MANUAL_MODIFIERS=1 to enable' unless ENV['QT_RUBY_MANUAL_MODIFIERS'] == '1'

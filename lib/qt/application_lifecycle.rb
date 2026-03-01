@@ -5,7 +5,13 @@ module Qt
   module ApplicationLifecycle
     def initialize(_argc = 0, _argv = [])
       @windows = []
-      @handle = Native.qapplication_new
+      argv0 = if _argv.respond_to?(:[]) && !_argv.empty?
+                _argv[0]
+              else
+                $PROGRAM_NAME
+              end
+      argv0 = 'ruby' if argv0.nil? || argv0.to_s.empty?
+      @handle = Native.qapplication_new(Qt::StringCodec.to_qt_text(argv0))
       self.class.current = self
     end
 

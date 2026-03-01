@@ -26,6 +26,7 @@ end
 def constructor_ffi_args(spec)
   return [:pointer] if spec[:constructor][:parent]
   return [:string] if spec[:constructor][:mode] == :string_path
+  return [:string] if spec[:constructor][:mode] == :qapplication
 
   []
 end

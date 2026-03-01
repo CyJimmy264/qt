@@ -2,8 +2,14 @@
 
 RUNTIME_HEADER_PATH = File.expand_path('../../ext/qt_ruby_bridge/qt_ruby_runtime.hpp', __dir__)
 
-SCALAR_CLASS_METHOD_FFI_RETURNS = %i[void int bool].freeze
+SCALAR_CLASS_METHOD_FFI_RETURNS = %i[void int bool string].freeze
 QAPPLICATION_STATIC_METHOD_EXCLUSIONS = %w[exec].freeze
+QAPPLICATION_STATIC_TEXT_SETTERS = %w[
+  setApplicationName
+  setDesktopFileName
+  setOrganizationName
+  setApplicationDisplayName
+].freeze
 
 def qt_free_function_specs(ast)
   @qt_free_function_specs_cache ||= {}.compare_by_identity
@@ -12,6 +18,7 @@ def qt_free_function_specs(ast)
   qt_specs = []
   qt_specs << qversion_free_function_spec(ast)
   qt_specs.concat(qapplication_static_free_function_specs(ast))
+  qt_specs.concat(qapplication_static_text_setter_specs(ast))
   qt_specs << qapplication_top_level_widgets_count_spec(ast)
   runtime_specs = runtime_free_function_specs_from_header
   @qt_free_function_specs_cache[ast] = merge_free_function_specs(qt_specs, runtime_specs).freeze
@@ -157,6 +164,49 @@ def qapplication_static_free_function_specs(ast)
   end
 end
 
+def qapplication_static_text_setter_specs(ast)
+  QAPPLICATION_STATIC_TEXT_SETTERS.filter_map do |qt_name|
+    build_qapplication_static_text_setter_spec(ast, qt_name)
+  end
+end
+
+def build_qapplication_static_text_setter_spec(ast, qt_name)
+  return nil unless resolve_qapplication_static_text_setter_candidate(ast, qt_name)
+
+  native_name = "qapplication_#{to_snake(qt_name)}"
+  {
+    name: "qt_ruby_#{native_name}",
+    ffi_return: :void,
+    args: [:string],
+    cpp_return: 'void',
+    cpp_args: 'const char* value',
+    cpp_body: ["QApplication::#{qt_name}(as_qstring(value));"],
+    qapplication_method: {
+      ruby_name: qt_name,
+      native: native_name,
+      args: [{ name: :value, ffi: :string, cast: :qstring }],
+      required_arg_count: 1
+    }
+  }
+end
+
+def resolve_qapplication_static_text_setter_candidate(ast, qt_name)
+  decls = collect_method_decls_with_bases(ast, 'QApplication', qt_name)
+  decls.any? do |decl|
+    next false unless decl['storageClass'] == 'static'
+    next false unless decl['__effective_access'] == 'public'
+
+    parsed = parse_method_signature(decl)
+    next false unless parsed
+    next false unless parsed[:return_type].to_s.strip == 'void'
+    next false unless parsed[:required_arg_count] == 1
+    next false unless parsed[:params].length == 1
+
+    normalized = normalized_cpp_type_name(parsed[:params].first[:type])
+    normalized == 'QString'
+  end
+end
+
 def build_qapplication_static_free_function_spec(ast, qt_name, int_cast_types)
   candidate = resolve_qapplication_static_noarg_candidate(ast, qt_name, int_cast_types)
   return nil unless candidate
@@ -165,8 +215,15 @@ def build_qapplication_static_free_function_spec(ast, qt_name, int_cast_types)
   cpp_body =
     if candidate[:ffi_return] == :void
       ["QApplication::#{qt_name}();"]
-    elsif candidate[:return_cast]
+    elsif candidate[:enum_cast]
       ["return static_cast<int>(QApplication::#{qt_name}());"]
+    elsif candidate[:ffi_return] == :string
+      [
+        "const QString value = QApplication::#{qt_name}();",
+        'thread_local QByteArray utf8;',
+        'utf8 = value.toUtf8();',
+        'return utf8.constData();'
+      ]
     else
       ["return QApplication::#{qt_name}();"]
     end
@@ -178,7 +235,12 @@ def build_qapplication_static_free_function_spec(ast, qt_name, int_cast_types)
     cpp_return: ffi_return_to_cpp(candidate[:ffi_return]),
     cpp_args: '',
     cpp_body: cpp_body,
-    qapplication_method: { ruby_name: qt_name, native: native_name, args: [] }
+    qapplication_method: {
+      ruby_name: qt_name,
+      native: native_name,
+      args: [],
+      return_cast: candidate[:return_cast]
+    }
   }
 end
 
@@ -204,13 +266,13 @@ end
 def qapplication_static_return_info(return_type, int_cast_types)
   mapped = map_cpp_return_type(return_type)
   if mapped && SCALAR_CLASS_METHOD_FFI_RETURNS.include?(mapped[:ffi_return])
-    return { ffi_return: mapped[:ffi_return], return_cast: nil }
+    return { ffi_return: mapped[:ffi_return], return_cast: mapped[:return_cast], enum_cast: false }
   end
 
   normalized = normalized_cpp_type_name(return_type)
   return nil unless normalized.include?('::') && int_cast_types.include?(normalized)
 
-  { ffi_return: :int, return_cast: normalized }
+  { ffi_return: :int, return_cast: nil, enum_cast: true }
 end
 
 def qapplication_class_method_specs(ast)
