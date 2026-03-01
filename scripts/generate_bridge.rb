@@ -886,7 +886,19 @@ rescue ArgumentError
   nil
 end
 
-def collect_enum_constants_for_scope(ast, target_scope)
+def append_constant_with_conflict_warning(constants, name, value, warnings, context)
+  existing = constants[name]
+  if existing.nil?
+    constants[name] = value
+    return
+  end
+
+  return if existing == value
+
+  warnings << "#{context}: #{name}=#{value} conflicts with existing #{existing}; keeping existing #{existing}"
+end
+
+def collect_enum_constants_for_scope(ast, target_scope, warnings = [])
   constants = {}
 
   walk_ast_scoped(ast) do |node, scope|
@@ -904,32 +916,83 @@ def collect_enum_constants_for_scope(ast, target_scope)
       value = parse_ast_integer_value(raw_value)
       next if value.nil?
 
-      constants[name] = value
+      append_constant_with_conflict_warning(constants, name, value, warnings, target_scope.join('::'))
     end
   end
 
   constants
 end
 
-def collect_qt_namespace_enum_constants(ast)
-  constants = collect_enum_constants_for_scope(ast, ['Qt'])
-  collect_enum_constants_for_scope(ast, ['QEvent']).each do |name, value|
+def collect_qt_namespace_enum_constants(ast, warnings = [])
+  constants = collect_enum_constants_for_scope(ast, ['Qt'], warnings)
+  collect_enum_constants_for_scope(ast, ['QEvent'], warnings).each do |name, value|
     alias_name = "Event#{name}"
     next unless alias_name.match?(/\A[A-Z][A-Za-z0-9_]*\z/)
-    next if constants.key?(alias_name)
 
-    constants[alias_name] = value
+    append_constant_with_conflict_warning(constants, alias_name, value, warnings, 'Qt::QEventAlias')
   end
   constants
 end
 
+def collect_qt_scoped_enum_constants(ast, warnings = [])
+  constants_by_owner = Hash.new { |h, k| h[k] = {} }
+
+  walk_ast_scoped(ast) do |node, scope|
+    next unless node['kind'] == 'EnumDecl'
+    next if scope.empty?
+
+    owner = scope.first
+    next unless owner.match?(/\AQ[A-Z]\w*\z/)
+    next if owner == 'Qt' || owner == 'QEvent'
+
+    Array(node['inner']).each do |entry|
+      next unless entry['kind'] == 'EnumConstantDecl'
+
+      name = entry['name'].to_s
+      next unless name.match?(/\A[A-Z][A-Za-z0-9_]*\z/)
+
+      raw_value = ast_extract_first_value(entry)
+      value = parse_ast_integer_value(raw_value)
+      next if value.nil?
+
+      append_constant_with_conflict_warning(
+        constants_by_owner[owner],
+        name,
+        value,
+        warnings,
+        "Qt::#{owner}"
+      )
+    end
+  end
+
+  constants_by_owner
+end
+
+def emit_generation_warnings(warnings)
+  warnings.uniq.each { |message| warn("WARNING: #{message}") }
+end
+
 def generate_ruby_constants(ast)
-  constants = collect_qt_namespace_enum_constants(ast)
+  warnings = []
+  constants = collect_qt_namespace_enum_constants(ast, warnings)
+  scoped_constants = collect_qt_scoped_enum_constants(ast, warnings)
+  emit_generation_warnings(warnings)
   lines = ['# frozen_string_literal: true', '', 'module Qt']
 
   constants.sort.each do |name, value|
     lines << "  #{name} = #{value} unless const_defined?(:#{name}, false)"
   end
+
+  lines << ''
+  lines << '  GENERATED_SCOPED_CONSTANTS = {'
+  scoped_constants.sort.each do |owner, owner_constants|
+    lines << "    '#{owner}' => {"
+    owner_constants.sort.each do |name, value|
+      lines << "      '#{name}' => #{value},"
+    end
+    lines << '    },'
+  end
+  lines << '  }.freeze unless const_defined?(:GENERATED_SCOPED_CONSTANTS, false)'
 
   lines << 'end'
   "#{lines.join("\n")}\n"

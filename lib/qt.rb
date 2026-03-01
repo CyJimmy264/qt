@@ -27,6 +27,7 @@ require_relative 'qt/event_runtime_dispatch'
 require_relative 'qt/event_runtime_qobject_methods'
 require_relative 'qt/event_runtime'
 require GENERATED_WIDGETS
+Qt::GeneratedConstantsRuntime.apply_generated_scoped_constants!(Qt)
 
 # Root namespace for all Qt Ruby bindings.
 module Qt
