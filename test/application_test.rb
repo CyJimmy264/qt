@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require 'open3'
+require 'rbconfig'
 
 class QtBindingsTest < Minitest::Test
   def test_version_present
@@ -53,6 +55,61 @@ class QtBindingsTest < Minitest::Test
       assert_equal 'mveynberg', QApplication.organization_name
       assert_includes ['qtimetrap.desktop', 'qtimetrap'], QApplication.desktop_file_name
     end
+  end
+
+  def test_qapplication_dispose_is_idempotent
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do |app|
+      assert_equal true, app.dispose
+      assert_nil app.handle
+      assert_nil QApplication.current
+      assert_nil app.dispose
+    end
+  end
+
+  def test_qapplication_repeated_create_dispose_cycle
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    4.times do
+      app = QApplication.new(0, ['bridge-cycle'])
+      window = QWidget.new
+      window.show
+      QApplication.process_events
+      assert_equal true, app.dispose
+    end
+  end
+
+  def test_qapplication_dispose_from_non_gui_thread_is_rejected
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do |app|
+      dispose_result = nil
+      Thread.new { dispose_result = app.dispose }.join
+
+      assert_equal false, dispose_result
+      refute_nil app.handle
+      assert_equal true, app.dispose
+    end
+  end
+
+  def test_qapplication_subprocess_shutdown_has_no_qthreadstorage_warning
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    lib_dir = File.expand_path('../lib', __dir__)
+    script = <<~'RUBY'
+      require 'qt'
+      app = Qt::QApplication.new(0, ['bridge-shutdown-smoke'])
+      window = Qt::QWidget.new
+      window.show
+      Qt::QApplication.process_events
+      window.close
+      Qt::QApplication.process_events
+      app.dispose
+    RUBY
+    stdout, stderr, status = Open3.capture3(RbConfig.ruby, '-I', lib_dir, '-e', script)
+    assert status.success?, "subprocess failed\nstdout:\n#{stdout}\nstderr:\n#{stderr}"
+    refute_match(/QThreadStorage:\s*entry\s+\d+\s+destroyed before end of thread/i, stderr)
   end
 
   def test_qapplication_keyboard_modifiers_manual_ctrl_shift_smoke

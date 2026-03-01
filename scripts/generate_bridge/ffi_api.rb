@@ -34,7 +34,7 @@ end
 def append_qapplication_delete_ffi_function(fns, spec)
   return unless spec[:prefix] == 'qapplication'
 
-  fns << { name: 'qt_ruby_qapplication_delete', ffi_return: :void, args: [:pointer] }
+  fns << { name: 'qt_ruby_qapplication_delete', ffi_return: :bool, args: [:pointer] }
 end
 
 def append_method_ffi_functions(fns, spec)

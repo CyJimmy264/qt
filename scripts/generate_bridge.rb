@@ -250,15 +250,8 @@ end
 
 def emit_cpp_qapplication_constructor(lines, name)
   lines << "extern \"C\" void* #{name}(const char* argv0) {"
-  lines << '  static int argc = 1;'
-  lines << '  static QByteArray arg0_storage;'
-  lines << '  static char* argv[] = {nullptr, nullptr};'
-  lines << '  arg0_storage = QByteArray(argv0 ? argv0 : "ruby");'
-  lines << '  if (arg0_storage.isEmpty()) {'
-  lines << '    arg0_storage = QByteArray("ruby");'
-  lines << '  }'
-  lines << '  argv[0] = arg0_storage.data();'
-  lines << '  return new QApplication(argc, argv);'
+  lines << '  // Delegate QApplication ownership/thread-contract policy to runtime.'
+  lines << '  return QtRubyRuntime::qapplication_new(argv0);'
   lines << '}'
 end
 
@@ -313,13 +306,9 @@ def generate_cpp_constructor(lines, spec)
 end
 
 def generate_cpp_delete(lines)
-  lines << 'extern "C" void qt_ruby_qapplication_delete(void* app_handle) {'
-  lines << '  if (!app_handle) {'
-  lines << '    return;'
-  lines << '  }'
-  lines << ''
-  lines << '  auto* app = static_cast<QApplication*>(app_handle);'
-  lines << '  delete app;'
+  lines << 'extern "C" bool qt_ruby_qapplication_delete(void* app_handle) {'
+  lines << '  // Runtime performs safe shutdown ordering and thread checks.'
+  lines << '  return QtRubyRuntime::qapplication_delete(app_handle);'
   lines << '}'
 end
 

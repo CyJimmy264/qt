@@ -5,6 +5,8 @@ module Qt
   module ApplicationLifecycle
     def initialize(_argc = 0, _argv = [])
       @windows = []
+      # Propagate real argv0 into native QApplication creation so desktop
+      # environments can derive app identity/window class from process intent.
       argv0 = if _argv.respond_to?(:[]) && !_argv.empty?
                 _argv[0]
               else
@@ -29,8 +31,14 @@ module Qt
     def dispose
       return if @handle.nil? || (@handle.respond_to?(:null?) && @handle.null?)
 
-      Native.qapplication_delete(@handle)
+      # Native returns false when teardown is rejected by safety guards
+      # (e.g. non-GUI thread dispose attempt). Keep handle intact in that case.
+      deleted = Native.qapplication_delete(@handle)
+      return false unless deleted
+
       @handle = nil
+      self.class.current = nil if self.class.current.equal?(self)
+      true
     end
   end
 end
