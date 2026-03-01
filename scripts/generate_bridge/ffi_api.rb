@@ -1,21 +1,13 @@
 # frozen_string_literal: true
 
-def free_functions
-  [
-    { name: 'qt_ruby_qt_version', ffi_return: :string, args: [] },
-    { name: 'qt_ruby_qapplication_process_events', ffi_return: :void, args: [] },
-    { name: 'qt_ruby_qapplication_top_level_widgets_count', ffi_return: :int, args: [] },
-    { name: 'qt_ruby_set_event_callback', ffi_return: :void, args: [:pointer] },
-    { name: 'qt_ruby_watch_qobject_event', ffi_return: :void, args: %i[pointer int] },
-    { name: 'qt_ruby_unwatch_qobject_event', ffi_return: :void, args: %i[pointer int] },
-    { name: 'qt_ruby_set_signal_callback', ffi_return: :void, args: [:pointer] },
-    { name: 'qt_ruby_qobject_connect_signal', ffi_return: :int, args: %i[pointer string] },
-    { name: 'qt_ruby_qobject_disconnect_signal', ffi_return: :int, args: %i[pointer string] }
-  ]
+def free_functions(free_function_specs)
+  free_function_specs.map do |spec|
+    { name: spec[:name], ffi_return: spec[:ffi_return], args: spec[:args] }
+  end
 end
 
-def all_ffi_functions(specs)
-  fns = free_functions.dup
+def all_ffi_functions(specs, free_function_specs:)
+  fns = free_functions(free_function_specs).dup
 
   specs.each do |spec|
     append_constructor_ffi_function(fns, spec)

@@ -21,6 +21,46 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
+  def test_qapplication_keyboard_modifiers_api_smoke
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      mods = QApplication.keyboard_modifiers
+      query_mods = QApplication.query_keyboard_modifiers
+
+      assert_kind_of Integer, mods
+      assert_kind_of Integer, query_mods
+
+      assert_equal mods, QApplication.keyboardModifiers
+      assert_equal query_mods, QApplication.queryKeyboardModifiers
+
+      assert_kind_of Integer, (mods & Qt::ControlModifier)
+      assert_kind_of Integer, (mods & Qt::ShiftModifier)
+    end
+  end
+
+  def test_qapplication_keyboard_modifiers_manual_ctrl_shift_smoke
+    skip 'native bridge is not available' unless Qt::Native.available?
+    skip 'manual smoke; set QT_RUBY_MANUAL_MODIFIERS=1 to enable' unless ENV['QT_RUBY_MANUAL_MODIFIERS'] == '1'
+
+    with_qapplication do
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 3.0
+      seen = false
+
+      while Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+        QApplication.process_events
+        mods = QApplication.keyboard_modifiers
+        if (mods & Qt::ControlModifier) != 0 || (mods & Qt::ShiftModifier) != 0
+          seen = true
+          break
+        end
+        sleep(0.01)
+      end
+
+      assert seen, 'expected ControlModifier or ShiftModifier while key is held'
+    end
+  end
+
   def test_qwidget_and_qlabel_register_children
     skip 'native bridge is not available' unless Qt::Native.available?
 

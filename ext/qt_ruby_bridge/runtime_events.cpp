@@ -1,7 +1,6 @@
 #include "qt_ruby_runtime.hpp"
 
 #include <QApplication>
-#include <QCoreApplication>
 #include <QEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -233,12 +232,6 @@ void ensure_event_filter_installed() {
   }
 }
 }  // namespace QtRubyRuntime
-
-void QtRubyRuntime::qapplication_process_events() { QCoreApplication::processEvents(); }
-
-int QtRubyRuntime::qapplication_top_level_widgets_count() {
-  return QApplication::topLevelWidgets().size();
-}
 
 void QtRubyRuntime::set_event_callback(void* callback_ptr) {
   event_callback_ref() = reinterpret_cast<EventCallback>(callback_ptr);

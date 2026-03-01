@@ -274,7 +274,7 @@ def string_path_constructor(arg_cast)
 end
 
 def build_base_specs(ast)
-  specs = [QAPPLICATION_SPEC.dup]
+  specs = [build_qapplication_spec(ast)]
   target_qt_classes = discover_target_qt_classes(ast, GENERATOR_SCOPE)
   debug_log("target_classes scope=#{GENERATOR_SCOPE} count=#{target_qt_classes.length}")
 

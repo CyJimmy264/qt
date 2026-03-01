@@ -4,6 +4,7 @@
 require 'fileutils'
 require 'json'
 require 'tempfile'
+require_relative 'generate_bridge/free_function_specs'
 
 ROOT = File.expand_path('..', __dir__)
 BUILD_DIR = File.join(ROOT, 'build')
@@ -17,22 +18,24 @@ RUBY_CONSTANTS_PATH = File.join(GENERATED_DIR, 'constants.rb')
 GENERATOR_SCOPE = (ENV['QT_RUBY_SCOPE'] || 'all').freeze
 SUPPORTED_SCOPES = %w[widgets qobject all].freeze
 
-QAPPLICATION_SPEC = {
-  qt_class: 'QApplication',
-  ruby_class: 'QApplication',
-  include: 'QApplication',
-  prefix: 'qapplication',
-  constructor: { parent: false, mode: :qapplication },
-  class_methods: [
-    { ruby_name: 'qtVersion', native: 'qt_version', args: [] },
-    { ruby_name: 'processEvents', native: 'qapplication_process_events', args: [] },
-    { ruby_name: 'topLevelWidgetsCount', native: 'qapplication_top_level_widgets_count', args: [] }
-  ],
-  methods: [
+def build_qapplication_spec(ast)
+  instance_methods = [
     { qt_name: 'exec', ruby_name: 'exec', ffi_return: :int, args: [] }
-  ],
-  validate: { constructors: ['QApplication'], methods: ['exec'] }
-}.freeze
+  ]
+  reserved_class_natives = instance_methods.map { |method| "qapplication_#{to_snake(method[:qt_name])}" }.to_set
+  class_methods = qapplication_class_method_specs(ast).reject { |method| reserved_class_natives.include?(method[:native]) }
+
+  {
+    qt_class: 'QApplication',
+    ruby_class: 'QApplication',
+    include: 'QApplication',
+    prefix: 'qapplication',
+    constructor: { parent: false, mode: :qapplication },
+    class_methods: class_methods,
+    methods: instance_methods,
+    validate: { constructors: ['QApplication'], methods: ['exec'] }
+  }
+end
 RUBY_RESERVED_WORDS = %w[
   BEGIN END alias and begin break case class def defined? do else elsif end ensure false
   for if in module next nil not or redo rescue retry return self super then true undef unless
@@ -354,9 +357,10 @@ def generate_cpp_method(lines, spec, method)
   lines << '}'
 end
 
-def generate_cpp_bridge(specs)
+def generate_cpp_bridge(specs, free_function_specs)
   lines = required_includes(GENERATOR_SCOPE).map { |inc| "#include <#{inc}>" }
   append_block(lines, cpp_bridge_prelude)
+  append_cpp_free_function_definitions(lines, free_function_specs)
 
   specs.each { |spec| append_cpp_spec_methods(lines, spec) }
 
@@ -484,48 +488,12 @@ def cpp_bridge_prelude
       return QStringLiteral("qtv:str:") + QString::fromUtf8(fallback);
     }
     }  // namespace
-
-    extern "C" const char* qt_ruby_qt_version() {
-      return qVersion();
-    }
-
-    extern "C" void qt_ruby_qapplication_process_events() {
-      QtRubyRuntime::qapplication_process_events();
-    }
-
-    extern "C" int qt_ruby_qapplication_top_level_widgets_count() {
-      return QtRubyRuntime::qapplication_top_level_widgets_count();
-    }
-
-    extern "C" void qt_ruby_set_event_callback(void* callback_ptr) {
-      QtRubyRuntime::set_event_callback(callback_ptr);
-    }
-
-    extern "C" void qt_ruby_watch_qobject_event(void* object_handle, int event_type) {
-      QtRubyRuntime::watch_qobject_event(object_handle, event_type);
-    }
-
-    extern "C" void qt_ruby_unwatch_qobject_event(void* object_handle, int event_type) {
-      QtRubyRuntime::unwatch_qobject_event(object_handle, event_type);
-    }
-
-    extern "C" void qt_ruby_set_signal_callback(void* callback_ptr) {
-      QtRubyRuntime::set_signal_callback(callback_ptr);
-    }
-
-    extern "C" int qt_ruby_qobject_connect_signal(void* object_handle, const char* signal_name) {
-      return QtRubyRuntime::qobject_connect_signal(object_handle, signal_name);
-    }
-
-    extern "C" int qt_ruby_qobject_disconnect_signal(void* object_handle, const char* signal_name) {
-      return QtRubyRuntime::qobject_disconnect_signal(object_handle, signal_name);
-    }
   CPP
 end
 
-def generate_bridge_api(specs)
+def generate_bridge_api(specs, free_function_specs)
   lines = bridge_api_prelude_lines
-  append_bridge_api_function_lines(lines, specs)
+  append_bridge_api_function_lines(lines, specs, free_function_specs)
   lines.concat(bridge_api_closure_lines)
   "#{lines.join("\n")}\n"
 end
@@ -540,8 +508,8 @@ def bridge_api_prelude_lines
   ]
 end
 
-def append_bridge_api_function_lines(lines, specs)
-  all_ffi_functions(specs).each do |fn|
+def append_bridge_api_function_lines(lines, specs, free_function_specs)
+  all_ffi_functions(specs, free_function_specs: free_function_specs).each do |fn|
     args = fn[:args].map { |arg| ":#{arg}" }.join(', ')
     lines << "      { name: :#{fn[:name]}, args: [#{args}], return: :#{fn[:ffi_return]} },"
   end
@@ -1000,6 +968,7 @@ end
 
 total_start = monotonic_now
 ast = timed('ast_dump_total') { ast_dump }
+free_function_specs = timed('build_free_function_specs') { qt_free_function_specs(ast) }
 base_specs = timed('build_base_specs') { build_base_specs(ast) }
 timed('validate_qt_api') { validate_qt_api!(ast, base_specs) }
 expanded_specs = timed('expand_auto_methods') { expand_auto_methods(base_specs, ast) }
@@ -1010,11 +979,11 @@ end
 
 timed('write_cpp_bridge') do
   FileUtils.mkdir_p(File.dirname(CPP_PATH))
-  File.write(CPP_PATH, generate_cpp_bridge(effective_specs))
+  File.write(CPP_PATH, generate_cpp_bridge(effective_specs, free_function_specs))
 end
 timed('write_bridge_api') do
   FileUtils.mkdir_p(File.dirname(API_PATH))
-  File.write(API_PATH, generate_bridge_api(effective_specs))
+  File.write(API_PATH, generate_bridge_api(effective_specs, free_function_specs))
 end
 timed('write_ruby_constants') do
   FileUtils.mkdir_p(File.dirname(RUBY_CONSTANTS_PATH))
