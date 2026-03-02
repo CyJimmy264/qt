@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-SCALAR_BRIDGED_QT_TYPES = Set.new(%w[QString QVariant QAnyStringView QByteArray]).freeze
+SCALAR_BRIDGED_QT_TYPES = Set.new(%w[QString QVariant QAnyStringView QByteArray QDateTime QDate QTime]).freeze
 
 def constructor_supports_parent_only?(decl)
   return false unless decl['__effective_access'] == 'public'

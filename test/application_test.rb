@@ -3,6 +3,7 @@
 require_relative 'test_helper'
 require 'open3'
 require 'rbconfig'
+require 'date'
 
 class QtBindingsTest < Minitest::Test
   def test_version_present
@@ -240,6 +241,69 @@ class QtBindingsTest < Minitest::Test
       window.set_visible(false)
 
       refute window.is_visible
+    end
+  end
+
+  def test_qdatetimeedit_roundtrip_time_with_timezone_and_seconds
+    skip 'native bridge is not available' unless Qt::Native.available?
+    skip 'QDateTimeEdit is not available in this generated scope' unless Qt.const_defined?(:QDateTimeEdit)
+
+    with_qapplication do
+      editor = QDateTimeEdit.new
+      editor.set_time_spec(Qt::UTC) if editor.respond_to?(:set_time_spec)
+      source = Time.new(2026, 3, 2, 17, 45, 12, '+00:00')
+      editor.set_date_time(source)
+      roundtrip = editor.date_time
+
+      assert_kind_of Time, roundtrip
+      assert_equal source.to_i, roundtrip.to_i
+      assert_equal source.sec, roundtrip.sec
+      assert_kind_of Integer, roundtrip.utc_offset
+    end
+  end
+
+  def test_qdatetimeedit_min_max_limits
+    skip 'native bridge is not available' unless Qt::Native.available?
+    skip 'QDateTimeEdit is not available in this generated scope' unless Qt.const_defined?(:QDateTimeEdit)
+
+    with_qapplication do
+      editor = QDateTimeEdit.new
+      min = Time.new(2026, 3, 1, 10, 0, 0, '+00:00')
+      max = Time.new(2026, 3, 1, 11, 0, 0, '+00:00')
+      editor.set_minimum_date_time(min)
+      editor.set_maximum_date_time(max)
+
+      editor.set_date_time(Time.new(2026, 3, 1, 12, 30, 0, '+00:00'))
+      value = editor.date_time
+
+      assert_operator value.to_i, :<=, max.to_i
+      assert_operator value.to_i, :>=, min.to_i
+    end
+  end
+
+  def test_qdatetimeedit_calendar_popup_smoke
+    skip 'native bridge is not available' unless Qt::Native.available?
+    skip 'QDateTimeEdit is not available in this generated scope' unless Qt.const_defined?(:QDateTimeEdit)
+
+    with_qapplication do
+      editor = QDateTimeEdit.new
+      editor.set_calendar_popup(true)
+      calendar = editor.calendar_widget
+
+      refute_nil calendar
+      assert(!calendar.respond_to?(:null?) || !calendar.null?)
+    end
+  end
+
+  def test_qcalendarwidget_selected_date_roundtrip
+    skip 'native bridge is not available' unless Qt::Native.available?
+    skip 'QCalendarWidget is not available in this generated scope' unless Qt.const_defined?(:QCalendarWidget)
+
+    with_qapplication do
+      calendar = QCalendarWidget.new
+      source = Date.new(2026, 3, 2)
+      calendar.set_selected_date(source)
+      assert_equal source, calendar.selected_date
     end
   end
 

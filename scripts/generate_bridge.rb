@@ -238,6 +238,9 @@ end
 def arg_expr(arg)
   case arg[:cast]
   when :qstring then "as_qstring(#{arg[:name]})"
+  when :qdatetime_from_utf8 then "qdatetime_from_bridge_value(#{arg[:name]})"
+  when :qdate_from_utf8 then "qdate_from_bridge_value(#{arg[:name]})"
+  when :qtime_from_utf8 then "qtime_from_bridge_value(#{arg[:name]})"
   when :qicon_ref then "*static_cast<QIcon*>(#{arg[:name]})"
   when :qany_string_view then "QAnyStringView(as_qstring(#{arg[:name]}))"
   when :qvariant_from_utf8 then "qvariant_from_bridge_value(#{arg[:name]})"
@@ -383,6 +386,9 @@ def cpp_bridge_prelude
     #include <QIcon>
     #include <QJsonDocument>
     #include <QJsonParseError>
+    #include <QDateTime>
+    #include <QDate>
+    #include <QTime>
     #include <QString>
     #include <QVariant>
     #include "qt_ruby_runtime.hpp"
@@ -446,6 +452,48 @@ def cpp_bridge_prelude
       }
 
       return QVariant(raw);
+    }
+
+    QDateTime qdatetime_from_bridge_value(const char* value) {
+      const QString raw = as_qstring(value);
+      const QString payload = raw.startsWith(QStringLiteral("qtdt:")) ? raw.mid(5) : raw;
+      QDateTime parsed = QDateTime::fromString(payload, Qt::ISODateWithMs);
+      if (!parsed.isValid()) {
+        parsed = QDateTime::fromString(payload, Qt::ISODate);
+      }
+      return parsed;
+    }
+
+    QDate qdate_from_bridge_value(const char* value) {
+      const QString raw = as_qstring(value);
+      const QString payload = raw.startsWith(QStringLiteral("qtdate:")) ? raw.mid(7) : raw;
+      QDate parsed = QDate::fromString(payload, QStringLiteral("yyyy-MM-dd"));
+      if (!parsed.isValid()) {
+        parsed = QDate::fromString(payload, Qt::ISODate);
+      }
+      return parsed;
+    }
+
+    QTime qtime_from_bridge_value(const char* value) {
+      const QString raw = as_qstring(value);
+      const QString payload = raw.startsWith(QStringLiteral("qttime:")) ? raw.mid(7) : raw;
+      QTime parsed = QTime::fromString(payload, QStringLiteral("HH:mm:ss"));
+      if (!parsed.isValid()) {
+        parsed = QTime::fromString(payload, QStringLiteral("HH:mm"));
+      }
+      return parsed;
+    }
+
+    QString qdatetime_to_bridge_string(const QDateTime& value) {
+      return QStringLiteral("qtdt:") + value.toString(Qt::ISODateWithMs);
+    }
+
+    QString qdate_to_bridge_string(const QDate& value) {
+      return QStringLiteral("qtdate:") + value.toString(QStringLiteral("yyyy-MM-dd"));
+    }
+
+    QString qtime_to_bridge_string(const QTime& value) {
+      return QStringLiteral("qttime:") + value.toString(QStringLiteral("HH:mm:ss"));
     }
 
     QString qvariant_to_bridge_string(const QVariant& value) {
@@ -554,6 +602,9 @@ def optional_arg_replacement(arg, safe)
   when :pointer then safe
   when :string
     return "(#{safe}.nil? ? '' : Qt::VariantCodec.encode(#{safe}))" if arg[:cast] == :qvariant_from_utf8
+    return "(#{safe}.nil? ? '' : Qt::DateTimeCodec.encode_qdatetime(#{safe}))" if arg[:cast] == :qdatetime_from_utf8
+    return "(#{safe}.nil? ? '' : Qt::DateTimeCodec.encode_qdate(#{safe}))" if arg[:cast] == :qdate_from_utf8
+    return "(#{safe}.nil? ? '' : Qt::DateTimeCodec.encode_qtime(#{safe}))" if arg[:cast] == :qtime_from_utf8
     return "(#{safe}.nil? ? '' : Qt::StringCodec.to_qt_text(#{safe}))" if text_bridge_arg?(arg)
 
     "(#{safe}.nil? ? '' : #{safe})"
@@ -564,6 +615,9 @@ end
 def ruby_arg_call_value(arg, safe, optional:)
   return "Qt::StringCodec.to_qt_text(#{safe})" if text_bridge_arg?(arg) && !optional
   return "Qt::VariantCodec.encode(#{safe})" if arg[:cast] == :qvariant_from_utf8 && !optional
+  return "Qt::DateTimeCodec.encode_qdatetime(#{safe})" if arg[:cast] == :qdatetime_from_utf8 && !optional
+  return "Qt::DateTimeCodec.encode_qdate(#{safe})" if arg[:cast] == :qdate_from_utf8 && !optional
+  return "Qt::DateTimeCodec.encode_qtime(#{safe})" if arg[:cast] == :qtime_from_utf8 && !optional
 
   optional ? optional_arg_replacement(arg, safe) : safe
 end
@@ -600,6 +654,9 @@ end
 def ruby_native_method_body(method, rewritten_native_call)
   return "Qt::StringCodec.from_qt_text(#{rewritten_native_call})" if method[:return_cast] == :qstring_to_utf8
   return "Qt::VariantCodec.decode(#{rewritten_native_call})" if method[:return_cast] == :qvariant_to_utf8
+  return "Qt::DateTimeCodec.decode_qdatetime(#{rewritten_native_call})" if method[:return_cast] == :qdatetime_to_utf8
+  return "Qt::DateTimeCodec.decode_qdate(#{rewritten_native_call})" if method[:return_cast] == :qdate_to_utf8
+  return "Qt::DateTimeCodec.decode_qtime(#{rewritten_native_call})" if method[:return_cast] == :qtime_to_utf8
 
   rewritten_native_call
 end
@@ -733,6 +790,9 @@ end
 
 def qapplication_class_method_body(method, native_call)
   return "        Qt::StringCodec.from_qt_text(#{native_call})" if method[:return_cast] == :qstring_to_utf8
+  return "        Qt::DateTimeCodec.decode_qdatetime(#{native_call})" if method[:return_cast] == :qdatetime_to_utf8
+  return "        Qt::DateTimeCodec.decode_qdate(#{native_call})" if method[:return_cast] == :qdate_to_utf8
+  return "        Qt::DateTimeCodec.decode_qtime(#{native_call})" if method[:return_cast] == :qtime_to_utf8
 
   "        #{native_call}"
 end

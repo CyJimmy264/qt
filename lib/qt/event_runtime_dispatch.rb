@@ -24,10 +24,11 @@ module Qt
       per_widget = signal_handlers[object_handle.address]
       return unless per_widget
 
-      per_widget.each_value do |entry|
+      per_widget.each do |signal_name, entry|
         next unless entry[:index] == signal_index
 
-        entry[:blocks].each { |handler| handler.call(payload) }
+        typed_payload = Qt::DateTimeCodec.decode_for_signal(signal_name, payload)
+        entry[:blocks].each { |handler| handler.call(typed_payload) }
       end
     end
   end

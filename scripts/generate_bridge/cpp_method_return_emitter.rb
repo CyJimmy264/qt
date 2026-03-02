@@ -11,6 +11,9 @@ class CppMethodReturnEmitter
   def emit
     return emit_void if method[:ffi_return] == :void
     return emit_qstring if qstring_return?
+    return emit_qdatetime if qdatetime_return?
+    return emit_qdate if qdate_return?
+    return emit_qtime if qtime_return?
     return emit_qvariant if qvariant_return?
     return emit_pointer if method[:ffi_return] == :pointer
 
@@ -29,6 +32,18 @@ class CppMethodReturnEmitter
     method[:ffi_return] == :string && method[:return_cast] == :qvariant_to_utf8
   end
 
+  def qdatetime_return?
+    method[:ffi_return] == :string && method[:return_cast] == :qdatetime_to_utf8
+  end
+
+  def qdate_return?
+    method[:ffi_return] == :string && method[:return_cast] == :qdate_to_utf8
+  end
+
+  def qtime_return?
+    method[:ffi_return] == :string && method[:return_cast] == :qtime_to_utf8
+  end
+
   def emit_void
     lines << "  #{invocation};"
   end
@@ -44,6 +59,27 @@ class CppMethodReturnEmitter
     lines << "  const QVariant value = #{invocation};"
     lines << '  thread_local QByteArray utf8;'
     lines << '  utf8 = qvariant_to_bridge_string(value).toUtf8();'
+    lines << '  return utf8.constData();'
+  end
+
+  def emit_qdatetime
+    lines << "  const QDateTime value = #{invocation};"
+    lines << '  thread_local QByteArray utf8;'
+    lines << '  utf8 = qdatetime_to_bridge_string(value).toUtf8();'
+    lines << '  return utf8.constData();'
+  end
+
+  def emit_qdate
+    lines << "  const QDate value = #{invocation};"
+    lines << '  thread_local QByteArray utf8;'
+    lines << '  utf8 = qdate_to_bridge_string(value).toUtf8();'
+    lines << '  return utf8.constData();'
+  end
+
+  def emit_qtime
+    lines << "  const QTime value = #{invocation};"
+    lines << '  thread_local QByteArray utf8;'
+    lines << '  utf8 = qtime_to_bridge_string(value).toUtf8();'
     lines << '  return utf8.constData();'
   end
 

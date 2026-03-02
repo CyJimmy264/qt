@@ -313,6 +313,50 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
     assert_includes captured.first, "\uFFFD"
   end
 
+  def test_qdatetimeedit_datetime_changed_signal_payload_is_time
+    skip 'native bridge is not available' unless Qt::Native.available?
+    skip 'QDateTimeEdit is not available in this generated scope' unless Qt.const_defined?(:QDateTimeEdit)
+
+    with_qapplication do
+      editor = QDateTimeEdit.new
+      editor.set_time_spec(Qt::UTC) if editor.respond_to?(:set_time_spec)
+      payloads = []
+      editor.connect('dateTimeChanged(QDateTime)') { |payload| payloads << payload }
+      source = Time.new(2026, 3, 2, 19, 33, 44, '+00:00')
+      editor.set_date_time(source)
+
+      wait_for_non_empty_payloads(payloads)
+      skip 'dateTimeChanged was not delivered in this Qt platform environment' if payloads.empty?
+
+      assert_kind_of Time, payloads.last
+      assert_equal source.to_i, payloads.last.to_i
+      assert_equal source.sec, payloads.last.sec
+      assert_kind_of Integer, payloads.last.utc_offset
+    end
+  end
+
+  def test_qdatetimeedit_subscriptions_survive_repeated_show_hide_and_destroy
+    skip 'native bridge is not available' unless Qt::Native.available?
+    skip 'QDateTimeEdit is not available in this generated scope' unless Qt.const_defined?(:QDateTimeEdit)
+
+    with_qapplication do
+      4.times do
+        window = QWidget.new
+        editor = QDateTimeEdit.new(window)
+        payloads = []
+        editor.connect('timeChanged(QTime)') { |payload| payloads << payload }
+        window.show
+        QApplication.process_events
+        editor.set_date_time(Time.new(2026, 3, 2, 9, 10, 11, '+00:00'))
+        QApplication.process_events
+        window.hide
+        QApplication.process_events
+        window.close
+        QApplication.process_events
+      end
+    end
+  end
+
   private
 
   def wait_for_non_empty_payloads(payloads)

@@ -1,5 +1,7 @@
 #include "qt_ruby_runtime.hpp"
 
+#include <QByteArray>
+#include <QDateTimeEdit>
 #include <QMetaMethod>
 #include <QObject>
 #include <QSignalMapper>
@@ -69,6 +71,39 @@ int resolve_signal_index(QObject* obj, const char* signal_name) {
 
   return -1;
 }
+
+const char* signal_payload_for(QObject* obj, int signal_index) {
+  if (!obj) {
+    return nullptr;
+  }
+
+  const QMetaMethod method = obj->metaObject()->method(signal_index);
+  const QByteArray signature = method.methodSignature();
+  auto* date_time_edit = qobject_cast<QDateTimeEdit*>(obj);
+  if (!date_time_edit) {
+    return nullptr;
+  }
+
+  thread_local QByteArray payload;
+  if (signature.startsWith("dateTimeChanged(")) {
+    payload = QStringLiteral("qtdt:").append(date_time_edit->dateTime().toString(Qt::ISODateWithMs)).toUtf8();
+    return payload.constData();
+  }
+  if (signature.startsWith("dateChanged(")) {
+    payload = QStringLiteral("qtdate:")
+                  .append(date_time_edit->date().toString(QStringLiteral("yyyy-MM-dd")))
+                  .toUtf8();
+    return payload.constData();
+  }
+  if (signature.startsWith("timeChanged(")) {
+    payload = QStringLiteral("qttime:")
+                  .append(date_time_edit->time().toString(QStringLiteral("HH:mm:ss")))
+                  .toUtf8();
+    return payload.constData();
+  }
+
+  return nullptr;
+}
 }  // namespace QtRubyRuntime
 
 void QtRubyRuntime::set_signal_callback(void* callback_ptr) {
@@ -108,7 +143,7 @@ int QtRubyRuntime::qobject_connect_signal(void* object_handle, const char* signa
         if (!signal_callback_ref()) {
           return;
         }
-        signal_callback_ref()(obj, mapped_signal_index, nullptr);
+        signal_callback_ref()(obj, mapped_signal_index, signal_payload_for(obj, mapped_signal_index));
       });
 
   if (!mapped_connection) {

@@ -79,7 +79,7 @@ Rake::TestTask.new do |t|
 end
 
 desc 'Build gem package'
-task build_gem: :compile do
+task :build_gem do
   sh "mkdir -p #{PKG_DIR}"
   sh "gem build #{GEMSPEC_PATH} --output #{PKG_FILE}"
 end
