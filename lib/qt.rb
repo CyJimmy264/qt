@@ -19,6 +19,7 @@ require_relative 'qt/errors'
 require_relative 'qt/constants'
 require_relative 'qt/string_codec'
 require_relative 'qt/date_time_codec'
+require_relative 'qt/key_sequence_codec'
 require_relative 'qt/variant_codec'
 require_relative 'qt/inspectable'
 require_relative 'qt/children_tracking'
@@ -29,6 +30,7 @@ require_relative 'qt/event_runtime_dispatch'
 require_relative 'qt/event_runtime_qobject_methods'
 require_relative 'qt/event_runtime'
 require GENERATED_WIDGETS
+require_relative 'qt/shortcut_compat'
 Qt::GeneratedConstantsRuntime.apply_generated_scoped_constants!(Qt)
 
 # Root namespace for all Qt Ruby bindings.

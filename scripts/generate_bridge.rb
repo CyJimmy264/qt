@@ -241,6 +241,7 @@ def arg_expr(arg)
   when :qdatetime_from_utf8 then "qdatetime_from_bridge_value(#{arg[:name]})"
   when :qdate_from_utf8 then "qdate_from_bridge_value(#{arg[:name]})"
   when :qtime_from_utf8 then "qtime_from_bridge_value(#{arg[:name]})"
+  when :qkeysequence_from_utf8 then "QKeySequence(as_qstring(#{arg[:name]}))"
   when :qicon_ref then "*static_cast<QIcon*>(#{arg[:name]})"
   when :qany_string_view then "QAnyStringView(as_qstring(#{arg[:name]}))"
   when :qvariant_from_utf8 then "qvariant_from_bridge_value(#{arg[:name]})"
@@ -288,6 +289,16 @@ def emit_cpp_parent_constructor(lines, name, spec)
   lines << '}'
 end
 
+def emit_cpp_keysequence_parent_constructor(lines, name, spec)
+  parent_type = spec[:constructor][:parent_type]
+  parent_class = parent_type.delete('*')
+  lines << "extern \"C\" void* #{name}(const char* key, void* parent_handle) {"
+  lines << '  const char* raw = key ? key : "";'
+  lines << "  #{parent_class}* parent = static_cast<#{parent_type}>(parent_handle);"
+  lines << "  return new #{spec[:qt_class]}(QKeySequence(as_qstring(raw)), parent);"
+  lines << '}'
+end
+
 def generate_cpp_constructor(lines, spec)
   name = ctor_function_name(spec)
 
@@ -297,6 +308,10 @@ def generate_cpp_constructor(lines, spec)
   end
   if spec[:constructor][:mode] == :string_path
     emit_cpp_string_path_constructor(lines, name, spec[:qt_class], spec[:constructor][:arg_cast])
+    return
+  end
+  if spec[:constructor][:mode] == :keysequence_parent
+    emit_cpp_keysequence_parent_constructor(lines, name, spec)
     return
   end
 
@@ -389,6 +404,7 @@ def cpp_bridge_prelude
     #include <QDateTime>
     #include <QDate>
     #include <QTime>
+    #include <QKeySequence>
     #include <QString>
     #include <QVariant>
     #include "qt_ruby_runtime.hpp"
@@ -605,6 +621,7 @@ def optional_arg_replacement(arg, safe)
     return "(#{safe}.nil? ? '' : Qt::DateTimeCodec.encode_qdatetime(#{safe}))" if arg[:cast] == :qdatetime_from_utf8
     return "(#{safe}.nil? ? '' : Qt::DateTimeCodec.encode_qdate(#{safe}))" if arg[:cast] == :qdate_from_utf8
     return "(#{safe}.nil? ? '' : Qt::DateTimeCodec.encode_qtime(#{safe}))" if arg[:cast] == :qtime_from_utf8
+    return "(#{safe}.nil? ? '' : Qt::KeySequenceCodec.encode(#{safe}))" if arg[:cast] == :qkeysequence_from_utf8
     return "(#{safe}.nil? ? '' : Qt::StringCodec.to_qt_text(#{safe}))" if text_bridge_arg?(arg)
 
     "(#{safe}.nil? ? '' : #{safe})"
@@ -618,6 +635,7 @@ def ruby_arg_call_value(arg, safe, optional:)
   return "Qt::DateTimeCodec.encode_qdatetime(#{safe})" if arg[:cast] == :qdatetime_from_utf8 && !optional
   return "Qt::DateTimeCodec.encode_qdate(#{safe})" if arg[:cast] == :qdate_from_utf8 && !optional
   return "Qt::DateTimeCodec.encode_qtime(#{safe})" if arg[:cast] == :qtime_from_utf8 && !optional
+  return "Qt::KeySequenceCodec.encode(#{safe})" if arg[:cast] == :qkeysequence_from_utf8 && !optional
 
   optional ? optional_arg_replacement(arg, safe) : safe
 end
@@ -674,6 +692,8 @@ end
 def append_widget_initializer(lines, spec:, widget_root:, indent:)
   if spec[:constructor][:mode] == :string_path
     append_string_path_initializer(lines, spec, indent)
+  elsif spec[:constructor][:mode] == :keysequence_parent
+    append_keysequence_parent_initializer(lines, spec, widget_root, indent)
   elsif spec[:constructor][:parent]
     append_parent_widget_initializer(lines, spec, widget_root, indent)
   else
@@ -699,6 +719,17 @@ end
 def append_string_path_initializer(lines, spec, indent)
   lines << "#{indent}def initialize(path = nil)"
   lines << "#{indent}  @handle = Native.#{spec[:prefix]}_new(Qt::StringCodec.to_qt_text(path))"
+end
+
+def append_keysequence_parent_initializer(lines, spec, widget_root, indent)
+  lines << "#{indent}def initialize(key = nil, parent = nil)"
+  lines << "#{indent}  if parent.nil? && (key.nil? || key.respond_to?(:handle))"
+  lines << "#{indent}    parent = key"
+  lines << "#{indent}    key = nil"
+  lines << "#{indent}  end"
+  lines << "#{indent}  @handle = Native.#{spec[:prefix]}_new(Qt::KeySequenceCodec.encode(key), parent&.handle)"
+  lines << "#{indent}  init_children_tracking!" if widget_root
+  append_parent_registration_logic(lines, spec, indent)
 end
 
 def append_parent_registration_logic(lines, spec, indent)

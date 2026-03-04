@@ -17,6 +17,23 @@ def constructor_supports_parent_only?(decl)
   params.drop(1).all? { |param| param[:has_default] }
 end
 
+def constructor_keysequence_parent_type(decl)
+  return nil unless decl['__effective_access'] == 'public'
+
+  parsed = parse_method_signature(decl)
+  return nil unless parsed
+
+  params = parsed[:params]
+  return nil if params.length < 2
+  return nil unless normalized_cpp_type_name(params.first[:type]) == 'QKeySequence'
+
+  parent_type = normalized_cpp_type_name(params[1][:type])
+  return nil unless %w[QWidget* QObject*].include?(parent_type)
+  return nil unless params.drop(2).all? { |param| param[:has_default] }
+
+  parent_type
+end
+
 def parent_constructor_first_type(decl)
   return nil unless decl['__effective_access'] == 'public'
 
@@ -222,6 +239,7 @@ end
 def constructor_usable_for_codegen?(ast, qt_class)
   ctor_decls = collect_constructor_decls(ast, qt_class)
   ctor_decls.any? do |decl|
+    constructor_keysequence_parent_type(decl) ||
     constructor_supports_parent_only?(decl) ||
       constructor_supports_no_args?(decl) ||
       constructor_supports_string_path?(decl)
@@ -230,6 +248,7 @@ end
 
 def build_base_spec_for_qt_class(ast, qt_class)
   ctor_decls = collect_constructor_decls(ast, qt_class)
+  keysequence_parent_type = ctor_decls.filter_map { |decl| constructor_keysequence_parent_type(decl) }.first
   parent_type = ctor_decls.filter_map { |decl| parent_constructor_first_type(decl) }.first
   string_path_cast = ctor_decls.filter_map do |decl|
     parsed = parse_method_signature(decl)
@@ -239,7 +258,9 @@ def build_base_spec_for_qt_class(ast, qt_class)
   end.first
   widget_child = qt_class != 'QWidget' && class_inherits?(ast, qt_class, 'QWidget')
   parent_ctor =
-    if parent_type
+    if keysequence_parent_type
+      { parent: true, parent_type: keysequence_parent_type, mode: :keysequence_parent, register_in_parent: widget_child }
+    elsif parent_type
       parent_constructor_for_type(parent_type, widget_child)
     elsif string_path_cast
       string_path_constructor(string_path_cast)
@@ -250,6 +271,11 @@ def build_base_spec_for_qt_class(ast, qt_class)
 end
 
 def base_spec_hash(qt_class, parent_ctor)
+  auto_method_rules = {}
+  # Prefer QShortcut#setKeys(StandardKey) in generated API and provide
+  # QKeySequence path via setKey(QKeySequence) + Ruby-level compatibility shim.
+  auto_method_rules[:setKeys] = { param_types: ['QKeySequence::StandardKey'] } if qt_class == 'QShortcut'
+
   {
     qt_class: qt_class,
     ruby_class: qt_class,
@@ -258,6 +284,7 @@ def base_spec_hash(qt_class, parent_ctor)
     constructor: parent_ctor,
     methods: [],
     auto_methods: :all,
+    auto_method_rules: auto_method_rules,
     # Constructor availability is already filtered during discovery.
     # Keep validation lightweight for auto-discovered classes to avoid false negatives
     # on template/specialized constructor names in Clang AST.

@@ -307,6 +307,36 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
+  def test_qshortcut_constructor_accepts_qkeysequence_and_parent
+    skip 'native bridge is not available' unless Qt::Native.available?
+    skip 'QShortcut is not available in this generated scope' unless Qt.const_defined?(:QShortcut)
+    skip 'QKeySequence is not available in this generated scope' unless Qt.const_defined?(:QKeySequence)
+
+    with_qapplication do
+      parent = QWidget.new
+      seq = QKeySequence.new('Space')
+      shortcut = QShortcut.new(seq, parent)
+
+      refute_nil shortcut.handle
+    end
+  end
+
+  def test_qshortcut_set_keys_accepts_qkeysequence_via_compat_path
+    skip 'native bridge is not available' unless Qt::Native.available?
+    skip 'QShortcut is not available in this generated scope' unless Qt.const_defined?(:QShortcut)
+    skip 'QKeySequence is not available in this generated scope' unless Qt.const_defined?(:QKeySequence)
+
+    with_qapplication do
+      parent = QWidget.new
+      shortcut = QShortcut.new(parent)
+      seq = QKeySequence.new('Space')
+
+      shortcut.set_key(seq) if shortcut.respond_to?(:set_key)
+      shortcut.set_keys(seq)
+      shortcut.set_keys(0)
+    end
+  end
+
   private
 
   def build_widget_layout_fixture

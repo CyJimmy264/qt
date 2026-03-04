@@ -24,6 +24,7 @@ def append_constructor_ffi_function(fns, spec)
 end
 
 def constructor_ffi_args(spec)
+  return %i[string pointer] if spec[:constructor][:mode] == :keysequence_parent
   return [:pointer] if spec[:constructor][:parent]
   return [:string] if spec[:constructor][:mode] == :string_path
   return [:string] if spec[:constructor][:mode] == :qapplication
