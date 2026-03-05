@@ -1,6 +1,6 @@
 # qt
 
-![Ruby](https://img.shields.io/badge/Ruby-3.1%2B-CC342D)
+![Ruby](https://img.shields.io/badge/Ruby-3.2%2B-CC342D)
 ![Qt](https://img.shields.io/badge/Qt-6.4.2%2B-41CD52)
 ![Status](https://img.shields.io/badge/Status-Experimental-orange)
 ![Bridge](https://img.shields.io/badge/Architecture-Ruby%20%E2%86%94%20Qt%20Bridge-blue)
@@ -56,7 +56,22 @@ gui { window.set_window_title("Changed live") }
 
 ## Install
 
-### Requirements
+### Quick install (RubyGems)
+
+```bash
+gem install qt
+```
+
+### Quick install (Fedora, binary RPM via COPR)
+
+```bash
+sudo dnf copr enable cyjimmy264/ruby-qt -y
+sudo dnf install -y ruby-qt
+```
+
+This installs a prebuilt package. Nothing is compiled on the target machine.
+
+### Requirements (build from source)
 
 - Ruby 3.2+
 - Qt 6.4.2+ dev packages (`Qt6Core`, `Qt6Gui`, `Qt6Widgets` via `pkg-config`)
@@ -93,12 +108,6 @@ bundle exec rake install
 
 `rake install` installs into your current Ruby environment (including active `rbenv` version).
 `rake compile` builds the full bridge with `QT_RUBY_SCOPE=all` by default.
-
-### Gem usage
-
-```bash
-gem install qt
-```
 
 ## Hello Qt in Ruby
 
