@@ -2,15 +2,15 @@
 
 Gem::Specification.new do |spec|
   spec.name          = 'qt'
-  spec.version       = '0.1.1'
+  spec.version       = '0.1.3'
   spec.authors       = ['Maksim Veynberg']
   spec.email         = ['mv@cj264.ru']
 
-  spec.summary       = 'Ruby bindings for Qt 6.10+'
+  spec.summary       = 'Ruby bindings for Qt 6.4.2+'
   spec.description   = 'Qt GUI bindings for Ruby with generated bridge code from system Qt headers.'
   spec.homepage      = 'https://github.com/CyJimmy264/qt'
   spec.license       = 'BSD-2-Clause'
-  spec.required_ruby_version = '>= 3.4'
+  spec.required_ruby_version = '>= 3.2'
 
   spec.files = Dir[
     'lib/**/*.rb',

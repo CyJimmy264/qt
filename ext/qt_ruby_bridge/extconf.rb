@@ -5,7 +5,7 @@ require 'fileutils'
 
 PKG_CONFIG = RbConfig::CONFIG['PKG_CONFIG'] || 'pkg-config'
 QT_PACKAGES = %w[Qt6Core Qt6Gui Qt6Widgets].freeze
-MINIMUM_QT_VERSION = Gem::Version.new('6.10.0')
+MINIMUM_QT_VERSION = Gem::Version.new('6.4.2')
 
 def pkg_config(*)
   system(PKG_CONFIG, *, out: File::NULL, err: File::NULL)

@@ -1,11 +1,11 @@
 # qt
 
 ![Ruby](https://img.shields.io/badge/Ruby-3.1%2B-CC342D)
-![Qt](https://img.shields.io/badge/Qt-6.10%2B-41CD52)
+![Qt](https://img.shields.io/badge/Qt-6.4.2%2B-41CD52)
 ![Status](https://img.shields.io/badge/Status-Experimental-orange)
 ![Bridge](https://img.shields.io/badge/Architecture-Ruby%20%E2%86%94%20Qt%20Bridge-blue)
 
-Ruby-first Qt 6.10+ bridge.
+Ruby-first Qt 6.4.2+ bridge.
 
 Build real Qt Widgets apps in pure Ruby, mutate them live from IRB, and keep C/C++ surface minimal via generated bridge code from system Qt headers.
 
@@ -58,9 +58,24 @@ gui { window.set_window_title("Changed live") }
 
 ### Requirements
 
-- Ruby 3.1+
-- Qt 6.10+ dev packages (`Qt6Core`, `Qt6Gui`, `Qt6Widgets` via `pkg-config`)
+- Ruby 3.2+
+- Qt 6.4.2+ dev packages (`Qt6Core`, `Qt6Gui`, `Qt6Widgets` via `pkg-config`)
 - C++17 compiler
+
+### System Requirements
+
+Minimum packages for Fedora:
+
+```bash
+dnf install @development-tools qt6-qtbase-devel ruby ruby-devel clang
+```
+
+Minimum packages for Ubuntu/Debian:
+
+```bash
+sudo apt update
+sudo apt install -y build-essential pkg-config qt6-base-dev ruby ruby-dev clang
+```
 
 Check Qt:
 
