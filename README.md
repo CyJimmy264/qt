@@ -243,6 +243,30 @@ bundle exec rake compile
 bundle exec rake rubocop
 ```
 
+### Test Environment Variables
+
+Tests force `QT_QPA_PLATFORM=offscreen` by default to avoid opening GUI windows.
+
+- `QT_QPA_PLATFORM_FORCE_XCB=true`
+  - override test default and run with `QT_QPA_PLATFORM=xcb` (real X11 backend)
+- `QT_RUBY_MANUAL_MODIFIERS=1`
+  - enable manual keyboard-modifier smoke test (`Ctrl/Shift` must be pressed during test window)
+
+Examples:
+
+```bash
+# default headless test run
+bundle exec rake test
+
+# run tests on xcb backend
+QT_QPA_PLATFORM_FORCE_XCB=true bundle exec rake test
+
+# run only manual modifiers smoke test
+QT_QPA_PLATFORM_FORCE_XCB=true QT_RUBY_MANUAL_MODIFIERS=1 \
+bundle exec ruby -Itest test/application_test.rb \
+  --name test_qapplication_keyboard_modifiers_manual_ctrl_shift_smoke --verbose
+```
+
 ### Generation Scope
 
 Default build scope is `all`. You can still override scope manually with `QT_RUBY_SCOPE`:

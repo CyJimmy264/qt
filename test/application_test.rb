@@ -49,12 +49,12 @@ class QtBindingsTest < Minitest::Test
       QApplication.set_application_name('QTimetrap')
       QApplication.set_application_display_name('QTimetrap UI')
       QApplication.set_organization_name('mveynberg')
-      QApplication.set_desktop_file_name('qtimetrap.desktop')
+      QApplication.set_desktop_file_name('qtimetrap')
 
       assert_equal 'QTimetrap', QApplication.application_name
       assert_equal 'QTimetrap UI', QApplication.application_display_name
       assert_equal 'mveynberg', QApplication.organization_name
-      assert_includes ['qtimetrap.desktop', 'qtimetrap'], QApplication.desktop_file_name
+      assert_equal 'qtimetrap', QApplication.desktop_file_name
     end
   end
 
@@ -86,7 +86,9 @@ class QtBindingsTest < Minitest::Test
 
     with_qapplication do |app|
       dispose_result = nil
-      Thread.new { dispose_result = app.dispose }.join
+      silence_native_stderr do
+        Thread.new { dispose_result = app.dispose }.join
+      end
 
       assert_equal false, dispose_result
       refute_nil app.handle
@@ -338,6 +340,17 @@ class QtBindingsTest < Minitest::Test
   end
 
   private
+
+  def silence_native_stderr
+    original_stderr = STDERR.dup
+    File.open(File::NULL, 'w') do |null|
+      STDERR.reopen(null)
+      yield
+    end
+  ensure
+    STDERR.reopen(original_stderr)
+    original_stderr.close
+  end
 
   def build_widget_layout_fixture
     window = QWidget.new
