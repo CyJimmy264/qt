@@ -6,6 +6,7 @@ vendor/bundle/
 *.bundle
 *.dll
 *.dylib
+*.gem
 
 # Extension build directories
 ext/**/Makefile
