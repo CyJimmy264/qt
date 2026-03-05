@@ -9,50 +9,13 @@ Ruby-first Qt 6.4.2+ bridge.
 
 Build real Qt Widgets apps in pure Ruby, mutate them live from IRB, and keep C/C++ surface minimal via generated bridge code from system Qt headers.
 
-## Why It Hits Different
+## Highlights
 
 - Pure Ruby usage: no QML, no extra UI language.
 - Real Qt power: `QApplication`, `QWidget`, `QLabel`, `QPushButton`, `QVBoxLayout`.
 - Ruby ergonomics: Qt-style and snake_case/property style in parallel.
 - Live GUI hacking: update widgets while the window is open.
 - Generated bridge: API is derived from system Qt headers.
-
-## 30-Second Wow
-
-```bash
-ruby examples/development_ordered_demos/02_live_layout_console.rb
-```
-
-Then in IRB:
-
-```ruby
-add_label("Release pipeline")
-add_button("Run")
-remove_last
-
-gui { window.resize(1100, 700) }
-items.last&.q_inspect
-```
-
-## Before -> After
-
-Before (typical static run):
-
-```ruby
-app = QApplication.new(0, [])
-window = QWidget.new
-window.show
-app.exec
-```
-
-After (live dev loop):
-
-```ruby
-# app already running
-add_label("Dynamic block")
-add_button("Ship")
-gui { window.set_window_title("Changed live") }
-```
 
 ## Install
 
@@ -70,6 +33,7 @@ sudo dnf install -y ruby-qt
 ```
 
 This installs a prebuilt package. Nothing is compiled on the target machine.
+Package name: `ruby-qt`.
 
 ### Requirements (build from source)
 
@@ -108,6 +72,23 @@ bundle exec rake install
 
 `rake install` installs into your current Ruby environment (including active `rbenv` version).
 `rake compile` builds the full bridge with `QT_RUBY_SCOPE=all` by default.
+
+## Quick Start
+
+```bash
+bundle exec ruby examples/development_ordered_demos/02_live_layout_console.rb
+```
+
+Optional: run interactive commands in IRB while the app is open:
+
+```ruby
+add_label("Release pipeline")
+add_button("Run")
+remove_last
+
+gui { window.resize(1100, 700) }
+items.last&.q_inspect
+```
 
 ## Hello Qt in Ruby
 
@@ -193,10 +174,7 @@ Shape:
 
 ## Examples
 
-```bash
-ruby examples/development_ordered_demos/01_dsl_hello.rb
-ruby examples/development_ordered_demos/02_live_layout_console.rb
-```
+See all demos in [`examples/development_ordered_demos`](examples/development_ordered_demos).
 
 QObject signal example:
 
@@ -206,6 +184,10 @@ timer.set_interval(1000)
 timer.connect('timeout') { puts 'tick' }
 timer.start
 ```
+
+## Projects
+
+- [`qtimetrap`](https://github.com/CyJimmy264/qtimetrap) - timetrap desktop UI built with this bridge.
 
 ## Architecture
 
@@ -262,8 +244,8 @@ Everything generated/build-related is under `build/` and should stay out of git.
 ## Development
 
 ```bash
-bundle exec rake test
 bundle exec rake compile
+bundle exec rake test
 bundle exec rake rubocop
 ```
 
