@@ -192,6 +192,7 @@ def forbidden_auto_exportable_method_name?(name)
   return true if name.start_with?('~')
   return true if name.include?('operator')
   return true if name.end_with?('Event')
+  return true if name.start_with?('qt_check_for_')
 
   forbidden_names = %w[
     event eventFilter childEvent customEvent timerEvent connectNotify disconnectNotify d_func connect disconnect
