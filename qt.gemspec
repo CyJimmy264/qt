@@ -3,13 +3,13 @@
 Gem::Specification.new do |spec|
   spec.name          = 'qt'
   spec.version       = '0.1.0'
-  spec.authors       = ['qt-ruby contributors']
-  spec.email         = ['devnull@example.com']
+  spec.authors       = ['Maksim Veynberg']
+  spec.email         = ['mv@cj264.ru']
 
   spec.summary       = 'Ruby bindings for Qt 6.10+'
   spec.description   = 'Qt GUI bindings for Ruby with generated bridge code from system Qt headers.'
   spec.homepage      = 'https://example.com/qt'
-  spec.license       = 'MIT'
+  spec.license       = 'BSD-2-Clause'
   spec.required_ruby_version = '>= 3.4'
 
   spec.files = Dir[
