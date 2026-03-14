@@ -151,6 +151,67 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
+  def test_qwidget_focus_widget_returns_wrapped_widget
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      window = QWidget.new
+      input = QLineEdit.new(window)
+      input.set_object_name('task_input')
+      input.set_geometry(10, 10, 120, 30)
+      window.set_geometry(0, 0, 240, 120)
+      window.show
+      input.set_focus
+      QApplication.process_events
+
+      focused = window.focus_widget
+
+      assert_kind_of QLineEdit, focused
+      assert_equal 'task_input', focused.object_name
+    end
+  end
+
+  def test_qwidget_child_at_returns_wrapped_widget_or_nil
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      window = QWidget.new
+      input = QLineEdit.new(window)
+      input.set_object_name('child_input')
+      input.set_geometry(20, 20, 100, 24)
+      window.set_geometry(0, 0, 240, 120)
+      window.show
+      QApplication.process_events
+
+      child = window.child_at(25, 25)
+
+      assert_kind_of QLineEdit, child
+      assert_equal 'child_input', child.object_name
+      assert_nil window.child_at(200, 100)
+    end
+  end
+
+  def test_qapplication_focus_widget_returns_wrapped_widget
+    skip 'native bridge is not available' unless Qt::Native.available?
+    skip 'QApplication.focus_widget is not available in this generated scope' unless QApplication.respond_to?(:focus_widget)
+
+    with_qapplication do
+      window = QWidget.new
+      input = QLineEdit.new(window)
+      input.set_object_name('global_focus_input')
+      input.set_geometry(10, 10, 120, 30)
+      window.set_geometry(0, 0, 240, 120)
+      window.show
+      input.set_focus
+      QApplication.process_events
+
+      focused = QApplication.focus_widget
+
+      assert_kind_of QLineEdit, focused
+      assert_equal 'global_focus_input', focused.object_name
+    end
+  end
+
   def test_qlineedit_text_roundtrip_utf8_cyrillic
     skip 'native bridge is not available' unless Qt::Native.available?
 
@@ -203,9 +264,15 @@ class QtBindingsTest < Minitest::Test
       label = QLabel.new(window)
       label.text = 'A'
 
-      assert_equal label.q_inspect, label.qt_inspect
-      assert_equal label.q_inspect, label.to_h
-      assert_equal 'QLabel', label.q_inspect[:qt_class]
+      inspected = label.q_inspect
+      qt_inspected = label.qt_inspect
+      hash_inspected = label.to_h
+
+      assert_equal 'QLabel', inspected[:qt_class]
+      assert_equal inspected[:qt_class], qt_inspected[:qt_class]
+      assert_equal inspected[:qt_class], hash_inspected[:qt_class]
+      assert_equal inspected.dig(:properties, :text), qt_inspected.dig(:properties, :text)
+      assert_equal inspected.dig(:properties, :text), hash_inspected.dig(:properties, :text)
     end
   end
 

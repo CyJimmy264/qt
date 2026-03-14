@@ -151,13 +151,13 @@ def find_getter_decl(ast, qt_class, property)
     parsed = parse_method_signature(decl)
     next false unless parsed && parsed[:params].empty?
 
-    map_cpp_return_type(parsed[:return_type])
+    map_cpp_return_type(parsed[:return_type], ast: ast)
   end
 end
 
-def build_property_getter_method(getter_decl, property)
+def build_property_getter_method(ast, getter_decl, property)
   parsed_getter = parse_method_signature(getter_decl)
-  ret_info = map_cpp_return_type(parsed_getter[:return_type])
+  ret_info = map_cpp_return_type(parsed_getter[:return_type], ast: ast)
   return nil unless ret_info
 
   getter = {
@@ -168,6 +168,7 @@ def build_property_getter_method(getter_decl, property)
     property: property
   }
   getter[:return_cast] = ret_info[:return_cast] if ret_info[:return_cast]
+  getter[:pointer_class] = ret_info[:pointer_class] if ret_info[:pointer_class]
   getter
 end
 
@@ -180,7 +181,7 @@ def enrich_spec_with_property_getter!(methods, ast, spec, method)
   getter_decl = find_getter_decl(ast, spec[:qt_class], property)
   return unless getter_decl
 
-  getter = build_property_getter_method(getter_decl, property)
+  getter = build_property_getter_method(ast, getter_decl, property)
   methods << getter if getter
 end
 
@@ -675,6 +676,7 @@ def ruby_native_method_body(method, rewritten_native_call)
   return "Qt::DateTimeCodec.decode_qdatetime(#{rewritten_native_call})" if method[:return_cast] == :qdatetime_to_utf8
   return "Qt::DateTimeCodec.decode_qdate(#{rewritten_native_call})" if method[:return_cast] == :qdate_to_utf8
   return "Qt::DateTimeCodec.decode_qtime(#{rewritten_native_call})" if method[:return_cast] == :qtime_to_utf8
+  return "Qt::ObjectWrapper.wrap(#{rewritten_native_call}, '#{method[:pointer_class]}')" if method[:pointer_class]
 
   rewritten_native_call
 end
@@ -824,6 +826,7 @@ def qapplication_class_method_body(method, native_call)
   return "        Qt::DateTimeCodec.decode_qdatetime(#{native_call})" if method[:return_cast] == :qdatetime_to_utf8
   return "        Qt::DateTimeCodec.decode_qdate(#{native_call})" if method[:return_cast] == :qdate_to_utf8
   return "        Qt::DateTimeCodec.decode_qtime(#{native_call})" if method[:return_cast] == :qtime_to_utf8
+  return "        Qt::ObjectWrapper.wrap(#{native_call}, '#{method[:pointer_class]}')" if method[:pointer_class]
 
   "        #{native_call}"
 end

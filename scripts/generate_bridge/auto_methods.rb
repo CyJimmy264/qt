@@ -67,13 +67,13 @@ def normalized_cpp_type_name(type_name)
   type
 end
 
-def map_cpp_return_type(type_name)
+def map_cpp_return_type(type_name, ast: nil)
   raw = type_name.to_s.strip
   return nil if unsupported_cpp_type?(raw)
   return nil if raw.start_with?('const ') && raw.end_with?('*')
 
   type = raw.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
-  map_scalar_cpp_return_type(type) || map_pointer_cpp_return_type(type)
+  map_scalar_cpp_return_type(type) || map_pointer_cpp_return_type(type, ast: ast)
 end
 
 def map_scalar_cpp_return_type(type)
@@ -89,10 +89,16 @@ def map_scalar_cpp_return_type(type)
   nil
 end
 
-def map_pointer_cpp_return_type(type)
-  return { ffi_return: :pointer } if type.end_with?('*')
+def map_pointer_cpp_return_type(type, ast: nil)
+  return nil unless type.end_with?('*')
 
-  nil
+  info = { ffi_return: :pointer }
+  base_type = type.sub(/\s*\*\z/, '').strip
+  if ast && class_inherits?(ast, base_type, 'QObject')
+    info[:pointer_class] = base_type
+  end
+
+  info
 end
 
 def parse_method_param_nodes(method_decl)
@@ -165,14 +171,15 @@ def build_auto_method_hash(entry, ret_info, args, required_arg_count)
     required_arg_count: required_arg_count
   }
   method[:return_cast] = ret_info[:return_cast] if ret_info[:return_cast]
+  method[:pointer_class] = ret_info[:pointer_class] if ret_info[:pointer_class]
   method
 end
 
-def build_auto_method_from_decl(method_decl, entry, qt_class:, int_cast_types:)
+def build_auto_method_from_decl(method_decl, entry, qt_class:, int_cast_types:, ast:)
   parsed = parse_method_signature(method_decl)
   return nil unless parsed
 
-  ret_info = map_cpp_return_type(parsed[:return_type])
+  ret_info = map_cpp_return_type(parsed[:return_type], ast: ast)
   return nil unless ret_info
 
   args, required_arg_count = build_auto_method_args(parsed, entry, qt_class, int_cast_types)
@@ -224,11 +231,11 @@ def invalid_method_name_scope?(class_name, visited)
   class_name.nil? || class_name.empty? || visited[class_name]
 end
 
-def build_auto_method_candidate(decl, entry, qt_class, int_cast_types)
+def build_auto_method_candidate(ast, decl, entry, qt_class, int_cast_types)
   parsed = parse_method_signature(decl)
   return nil unless parsed
 
-  method = build_auto_method_from_decl(decl, entry, qt_class: qt_class, int_cast_types: int_cast_types)
+  method = build_auto_method_from_decl(decl, entry, qt_class: qt_class, int_cast_types: int_cast_types, ast: ast)
   return nil unless method
 
   {
@@ -276,11 +283,11 @@ def resolve_auto_method_cache_key(qt_class, entry)
   ]
 end
 
-def build_auto_method_candidates(decls, entry, qt_class, int_cast_types)
+def build_auto_method_candidates(ast, decls, entry, qt_class, int_cast_types)
   decls.filter_map do |decl|
     next unless auto_method_decl_candidate?(decl)
 
-    build_auto_method_candidate(decl, entry, qt_class, int_cast_types)
+    build_auto_method_candidate(ast, decl, entry, qt_class, int_cast_types)
   end
 end
 
@@ -325,7 +332,7 @@ def resolve_auto_method_built_candidates(ast, qt_class, entry)
   return nil if decls.empty?
 
   int_cast_types = ast_int_cast_type_set(ast)
-  built = build_auto_method_candidates(decls, entry, qt_class, int_cast_types)
+  built = build_auto_method_candidates(ast, decls, entry, qt_class, int_cast_types)
   return nil if built.empty?
 
   built = filter_auto_method_candidates(built, entry)

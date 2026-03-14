@@ -1,5 +1,5 @@
 Name:           ruby-qt
-Version:        0.1.3
+Version:        0.1.4
 Release:        1%{?dist}
 Summary:        Ruby bindings for Qt 6 with generated native bridge
 
@@ -107,5 +107,8 @@ find %{buildroot} -type f -name qt_ruby_bridge.so -exec /usr/bin/chrpath -d {} \
 %{gem_dir}/extensions
 
 %changelog
+* Sat Mar 14 2026 Maksim Veynberg <mv@cj264.ru> - 0.1.4-1
+- Wrap QObject-derived pointer returns into Ruby widget objects
+
 * Thu Mar 05 2026 Maksim Veynberg <mv@cj264.ru> - 0.1.3-1
 - Initial Fedora/COPR packaging for ruby-qt

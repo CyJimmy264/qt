@@ -2,7 +2,7 @@
 
 RUNTIME_HEADER_PATH = File.expand_path('../../ext/qt_ruby_bridge/qt_ruby_runtime.hpp', __dir__)
 
-SCALAR_CLASS_METHOD_FFI_RETURNS = %i[void int bool string].freeze
+SCALAR_CLASS_METHOD_FFI_RETURNS = %i[void int bool string pointer].freeze
 QAPPLICATION_STATIC_METHOD_EXCLUSIONS = %w[exec].freeze
 QAPPLICATION_STATIC_TEXT_SETTERS = %w[
   setApplicationName
@@ -239,7 +239,8 @@ def build_qapplication_static_free_function_spec(ast, qt_name, int_cast_types)
       ruby_name: qt_name,
       native: native_name,
       args: [],
-      return_cast: candidate[:return_cast]
+      return_cast: candidate[:return_cast],
+      pointer_class: candidate[:pointer_class]
     }
   }
 end
@@ -253,7 +254,7 @@ def resolve_qapplication_static_noarg_candidate(ast, qt_name, int_cast_types)
     parsed = parse_method_signature(decl)
     next unless parsed && parsed[:required_arg_count].zero?
 
-    ret_info = qapplication_static_return_info(parsed[:return_type], int_cast_types)
+    ret_info = qapplication_static_return_info(parsed[:return_type], int_cast_types, ast: ast)
     next unless ret_info
 
     { decl: decl, param_count: parsed[:params].length }.merge(ret_info)
@@ -263,10 +264,15 @@ def resolve_qapplication_static_noarg_candidate(ast, qt_name, int_cast_types)
   candidates.min_by { |item| item[:param_count] }
 end
 
-def qapplication_static_return_info(return_type, int_cast_types)
-  mapped = map_cpp_return_type(return_type)
+def qapplication_static_return_info(return_type, int_cast_types, ast:)
+  mapped = map_cpp_return_type(return_type, ast: ast)
   if mapped && SCALAR_CLASS_METHOD_FFI_RETURNS.include?(mapped[:ffi_return])
-    return { ffi_return: mapped[:ffi_return], return_cast: mapped[:return_cast], enum_cast: false }
+    return {
+      ffi_return: mapped[:ffi_return],
+      return_cast: mapped[:return_cast],
+      pointer_class: mapped[:pointer_class],
+      enum_cast: false
+    }
   end
 
   normalized = normalized_cpp_type_name(return_type)
