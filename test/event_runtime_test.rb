@@ -145,6 +145,16 @@ class QtEventRuntimeApiTest < Minitest::Test
     assert_equal 'QWheelEvent', schema[:event_class]
   end
 
+  def test_generated_event_payload_schema_covers_phase_two_event_families
+    assert_equal 'QEnterEvent', Qt::GENERATED_EVENT_PAYLOAD_SCHEMAS[:enter][:event_class]
+    assert_equal 'QContextMenuEvent', Qt::GENERATED_EVENT_PAYLOAD_SCHEMAS[:context_menu][:event_class]
+    assert_equal 'QHoverEvent', Qt::GENERATED_EVENT_PAYLOAD_SCHEMAS[:hover_move][:event_class]
+    assert_equal 'QDragEnterEvent', Qt::GENERATED_EVENT_PAYLOAD_SCHEMAS[:drag_enter][:event_class]
+    assert_equal 'QDragMoveEvent', Qt::GENERATED_EVENT_PAYLOAD_SCHEMAS[:drag_move][:event_class]
+    assert_equal 'QDragLeaveEvent', Qt::GENERATED_EVENT_PAYLOAD_SCHEMAS[:drag_leave][:event_class]
+    assert_equal 'QDropEvent', Qt::GENERATED_EVENT_PAYLOAD_SCHEMAS[:drop][:event_class]
+  end
+
   def test_signal_resolution_requires_valid_signature
     skip 'native bridge is not available' unless Qt::Native.available?
 

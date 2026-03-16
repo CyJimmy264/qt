@@ -4,12 +4,19 @@ EVENT_PAYLOAD_CLASS_RULES = [
   { pattern: /\A(?:MouseButtonPress|MouseButtonRelease|MouseButtonDblClick|MouseMove|NonClientAreaMouseButtonPress|NonClientAreaMouseButtonRelease|NonClientAreaMouseButtonDblClick|NonClientAreaMouseMove)\z/, class_name: 'QMouseEvent' },
   { pattern: /\A(?:KeyPress|KeyRelease)\z/, class_name: 'QKeyEvent' },
   { pattern: /\AWheel\z/, class_name: 'QWheelEvent' },
+  { pattern: /\AEnter\z/, class_name: 'QEnterEvent' },
   { pattern: /\AResize\z/, class_name: 'QResizeEvent' },
   { pattern: /\A(?:FocusIn|FocusOut|FocusAboutToChange)\z/, class_name: 'QFocusEvent' },
   { pattern: /\AMove\z/, class_name: 'QMoveEvent' },
   { pattern: /\AClose\z/, class_name: 'QCloseEvent' },
   { pattern: /\AShow\z/, class_name: 'QShowEvent' },
-  { pattern: /\AHide\z/, class_name: 'QHideEvent' }
+  { pattern: /\AHide\z/, class_name: 'QHideEvent' },
+  { pattern: /\AContextMenu\z/, class_name: 'QContextMenuEvent' },
+  { pattern: /\AHover(?:Enter|Move|Leave)\z/, class_name: 'QHoverEvent' },
+  { pattern: /\ADragEnter\z/, class_name: 'QDragEnterEvent' },
+  { pattern: /\ADragMove\z/, class_name: 'QDragMoveEvent' },
+  { pattern: /\ADragLeave\z/, class_name: 'QDragLeaveEvent' },
+  { pattern: /\ADrop\z/, class_name: 'QDropEvent' }
 ].freeze
 
 EVENT_PAYLOAD_COMPATIBILITY_ALIASES = {
