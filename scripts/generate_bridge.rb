@@ -549,6 +549,14 @@ def cpp_bridge_prelude
       const QByteArray fallback = value.toString().toUtf8().toBase64();
       return QStringLiteral("qtv:str:") + QString::fromUtf8(fallback);
     }
+
+    QString qobject_list_to_bridge_string(const QObjectList& value) {
+      QJsonArray array;
+      for (QObject* object : value) {
+        array.append(QString::number(reinterpret_cast<quintptr>(object)));
+      }
+      return QString::fromUtf8(QJsonDocument(array).toJson(QJsonDocument::Compact));
+    }
     }  // namespace
   CPP
 end
@@ -675,6 +683,9 @@ end
 
 def ruby_native_method_body(method, rewritten_native_call)
   return "Qt::StringCodec.from_qt_text(#{rewritten_native_call})" if method[:return_cast] == :qstring_to_utf8
+  if method[:return_cast] == :qobject_list_to_wrapped_array
+    return "Qt::ObjectListCodec.decode(#{rewritten_native_call}, '#{method[:object_list_class]}')"
+  end
   return "Qt::VariantCodec.decode(#{rewritten_native_call})" if method[:return_cast] == :qvariant_to_utf8
   return "Qt::DateTimeCodec.decode_qdatetime(#{rewritten_native_call})" if method[:return_cast] == :qdatetime_to_utf8
   return "Qt::DateTimeCodec.decode_qdate(#{rewritten_native_call})" if method[:return_cast] == :qdate_to_utf8
@@ -712,7 +723,6 @@ end
 def append_parent_widget_initializer(lines, spec, widget_root, indent)
   lines << "#{indent}def initialize(parent = nil)"
   lines << "#{indent}  @handle = Native.#{spec[:prefix]}_new(parent&.handle)"
-  lines << "#{indent}  init_children_tracking!" if widget_root
   append_parent_registration_logic(lines, spec, indent)
 end
 
@@ -733,20 +743,15 @@ def append_keysequence_parent_initializer(lines, spec, widget_root, indent)
   lines << "#{indent}    key = nil"
   lines << "#{indent}  end"
   lines << "#{indent}  @handle = Native.#{spec[:prefix]}_new(Qt::KeySequenceCodec.encode(key), parent&.handle)"
-  lines << "#{indent}  init_children_tracking!" if widget_root
   append_parent_registration_logic(lines, spec, indent)
 end
 
 def append_parent_registration_logic(lines, spec, indent)
   if spec[:ruby_class] == 'QWidget'
-    lines << "#{indent}  if parent"
-    lines << "#{indent}    parent.add_child(self)"
-    lines << "#{indent}  else"
+    lines << "#{indent}  unless parent"
     lines << "#{indent}    app = QApplication.current"
     lines << "#{indent}    app&.register_window(self)"
     lines << "#{indent}  end"
-  elsif spec[:constructor][:register_in_parent]
-    lines << "#{indent}  parent.add_child(self) if parent&.respond_to?(:add_child)"
   end
 end
 
@@ -826,6 +831,9 @@ end
 
 def qapplication_class_method_body(method, native_call)
   return "        Qt::StringCodec.from_qt_text(#{native_call})" if method[:return_cast] == :qstring_to_utf8
+  if method[:return_cast] == :qobject_list_to_wrapped_array
+    return "        Qt::ObjectListCodec.decode(#{native_call}, '#{method[:object_list_class]}')"
+  end
   return "        Qt::DateTimeCodec.decode_qdatetime(#{native_call})" if method[:return_cast] == :qdatetime_to_utf8
   return "        Qt::DateTimeCodec.decode_qdate(#{native_call})" if method[:return_cast] == :qdate_to_utf8
   return "        Qt::DateTimeCodec.decode_qtime(#{native_call})" if method[:return_cast] == :qtime_to_utf8
@@ -842,9 +850,7 @@ def generate_ruby_widget_class_header(lines, spec, metadata:, super_ruby:, class
   append_ruby_class_api_constants(lines, qt_class: spec[:qt_class], metadata: metadata, indent: '    ')
   lines << ''
   lines << '    attr_reader :handle'
-  lines << '    attr_reader :children' if widget_root
   lines << '    include Inspectable'
-  lines << '    include ChildrenTracking' if widget_root
   lines << '    include EventRuntime::QObjectMethods' if qobject_based
   lines << ''
 end

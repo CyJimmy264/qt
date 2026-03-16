@@ -81,6 +81,7 @@ def map_scalar_cpp_return_type(type)
   return { ffi_return: :int } if type == 'int'
   return { ffi_return: :bool } if type == 'bool'
   return { ffi_return: :string, return_cast: :qstring_to_utf8 } if type == 'QString'
+  return { ffi_return: :string, return_cast: :qobject_list_to_wrapped_array, object_list_class: 'QObject' } if type == 'QObjectList'
   return { ffi_return: :string, return_cast: :qdatetime_to_utf8 } if type == 'QDateTime'
   return { ffi_return: :string, return_cast: :qdate_to_utf8 } if type == 'QDate'
   return { ffi_return: :string, return_cast: :qtime_to_utf8 } if type == 'QTime'

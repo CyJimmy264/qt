@@ -163,6 +163,24 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
+  def test_qobject_children_returns_canonical_wrappers_from_qt
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      window = QWidget.new
+      label = QLabel.new(window)
+      label.set_text('A')
+
+      a = window.children.first
+      a.instance_variable_set(:@foo, 123)
+      b = window.children.first
+
+      assert a.equal?(label)
+      assert a.equal?(b)
+      assert_equal 123, b.instance_variable_get(:@foo)
+    end
+  end
+
   def test_qwidget_focus_widget_returns_wrapped_widget
     skip 'native bridge is not available' unless Qt::Native.available?
 

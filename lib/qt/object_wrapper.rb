@@ -70,7 +70,6 @@ module Qt
     def instantiate_wrapper(klass, pointer)
       wrapped = klass.allocate
       wrapped.instance_variable_set(:@handle, pointer)
-      wrapped.init_children_tracking! if wrapped.respond_to?(:init_children_tracking!, true)
       wrapped
     end
 

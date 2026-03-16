@@ -11,6 +11,7 @@ class CppMethodReturnEmitter
   def emit
     return emit_void if method[:ffi_return] == :void
     return emit_qstring if qstring_return?
+    return emit_qobject_list if qobject_list_return?
     return emit_qdatetime if qdatetime_return?
     return emit_qdate if qdate_return?
     return emit_qtime if qtime_return?
@@ -30,6 +31,10 @@ class CppMethodReturnEmitter
 
   def qvariant_return?
     method[:ffi_return] == :string && method[:return_cast] == :qvariant_to_utf8
+  end
+
+  def qobject_list_return?
+    method[:ffi_return] == :string && method[:return_cast] == :qobject_list_to_wrapped_array
   end
 
   def qdatetime_return?
@@ -59,6 +64,13 @@ class CppMethodReturnEmitter
     lines << "  const QVariant value = #{invocation};"
     lines << '  thread_local QByteArray utf8;'
     lines << '  utf8 = qvariant_to_bridge_string(value).toUtf8();'
+    lines << '  return utf8.constData();'
+  end
+
+  def emit_qobject_list
+    lines << "  const QObjectList value = #{invocation};"
+    lines << '  thread_local QByteArray utf8;'
+    lines << '  utf8 = qobject_list_to_bridge_string(value).toUtf8();'
     lines << '  return utf8.constData();'
   end
 
