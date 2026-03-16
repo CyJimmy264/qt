@@ -50,44 +50,61 @@ def event_payload_camel_tokens(name)
   name.to_s.scan(/[A-Z]+(?=[A-Z][a-z]|\z)|[A-Z]?[a-z]+|\d+/)
 end
 
-def event_payload_family_score(event_name, class_name)
+def event_payload_token_sequence_present?(haystack, needle)
+  return false if haystack.empty? || needle.empty? || needle.length > haystack.length
+
+  0.upto(haystack.length - needle.length).any? do |start_idx|
+    haystack[start_idx, needle.length] == needle
+  end
+end
+
+def event_payload_family_match?(event_name, class_name, mode)
   event_tokens = event_payload_camel_tokens(event_name)
   class_tokens = event_payload_camel_tokens(event_payload_class_stem(class_name))
-  return 0 if event_tokens.empty? || class_tokens.empty?
+  return false if event_tokens.empty? || class_tokens.empty?
 
   event_downcase = event_tokens.map(&:downcase)
   class_downcase = class_tokens.map(&:downcase)
-  overlap = (event_downcase & class_downcase).length
-  return 0 if overlap.zero?
+  event_compact = event_downcase.join
+  class_compact = class_downcase.join
 
-  score = overlap * 10
-  score += 5 if event_downcase.first == class_downcase.first
-  score += 3 if event_downcase.last == class_downcase.last
-  score += 2 if event_downcase.join.include?(class_downcase.join)
-  score += 1 if class_downcase.join.include?(event_downcase.join)
-  score
+  case mode
+  when :prefix
+    event_downcase.first(class_downcase.length) == class_downcase
+  when :suffix
+    event_downcase.last(class_downcase.length) == class_downcase
+  when :contiguous_tokens
+    event_payload_token_sequence_present?(event_downcase, class_downcase)
+  when :compact_substring
+    event_compact.include?(class_compact)
+  else
+    false
+  end
+end
+
+def resolve_event_payload_family_class_name(ast, event_name, warnings)
+  %i[prefix suffix contiguous_tokens compact_substring].each do |mode|
+    matches = event_payload_type_family_class_names(ast).select do |class_name|
+      event_payload_family_match?(event_name, class_name, mode)
+    end
+    next if matches.empty?
+
+    if matches.length == 1
+      return matches.first
+    end
+
+    warnings << "Qt::EventPayload: ambiguous #{mode} family match for #{event_name}: #{matches.sort.join(', ')}"
+    return nil
+  end
+
+  nil
 end
 
 def resolve_event_payload_class_name(ast, event_name, warnings = [])
   exact_class_name = "Q#{event_name}Event"
   return exact_class_name if event_payload_class_names(ast).include?(exact_class_name)
 
-  candidates = event_payload_type_family_class_names(ast).filter_map do |class_name|
-    score = event_payload_family_score(event_name, class_name)
-    next if score.zero?
-
-    { class_name: class_name, score: score }
-  end
-  return nil if candidates.empty?
-
-  best_score = candidates.map { |entry| entry[:score] }.max
-  best = candidates.select { |entry| entry[:score] == best_score }
-  if best.length > 1
-    warnings << "Qt::EventPayload: ambiguous family match for #{event_name}: #{best.map { |entry| entry[:class_name] }.sort.join(', ')}"
-    return nil
-  end
-
-  best.first[:class_name]
+  resolve_event_payload_family_class_name(ast, event_name, warnings)
 end
 
 def supported_event_payload_return?(return_type, int_cast_types)
