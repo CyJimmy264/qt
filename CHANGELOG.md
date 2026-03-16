@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## [Unreleased]
+
+### Added
+
+- Generate event payload schemas from Qt-derived event classes and switch the native event callback ABI to JSON payload delivery.
+- Expand generated event payload coverage for additional event families, including enter, context menu, hover, drag-and-drop related events.
+
+### Changed
+
+- Derive event payload classes without hand-written regex rules and use deterministic, more specific family matching when resolving Qt event subclasses.
+- Distinguish ignored versus consumed event runtime callbacks: `false` / `:ignore` now keep pass-through semantics, while `true` / `:consume` consume the Qt event and make the native event filter return `true`.
+
 ## [0.1.5] - 2026-03-16
 
 ### Added

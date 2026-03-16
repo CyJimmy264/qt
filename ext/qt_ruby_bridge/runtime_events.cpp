@@ -16,6 +16,10 @@
 #include "../../build/generated/event_payloads.inc"
 
 namespace QtRubyRuntime {
+constexpr int kEventCallbackIgnore = 0;
+constexpr int kEventCallbackContinue = 1;
+constexpr int kEventCallbackConsume = 2;
+
 EventCallback& event_callback_ref() {
   static EventCallback callback = nullptr;
   return callback;
@@ -223,8 +227,12 @@ class EventFilter : public QObject {
     const QByteArray payload_json = QtRubyGeneratedEventPayloads::serialize_event_payload(et, event);
     log_event_dispatch(watched, dispatch_target, et, event->isAccepted(), "dispatch");
     const int callback_result = event_callback_ref()(dispatch_target, et, payload_json.constData());
-    if (callback_result == 0) {
+    if (callback_result == kEventCallbackIgnore) {
       event->ignore();
+    }
+    if (callback_result == kEventCallbackConsume) {
+      event->accept();
+      return true;
     }
     return QObject::eventFilter(watched, event);
   }

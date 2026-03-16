@@ -4,19 +4,26 @@
 module Qt
   # Dispatch helpers for event/signal callbacks from the native bridge.
   module EventRuntimeDispatch
+    EVENT_RESULT_IGNORE = 0
+    EVENT_RESULT_CONTINUE = 1
+    EVENT_RESULT_CONSUME = 2
+
     module_function
 
     def dispatch_event(event_handlers, object_handle, event_type, payload)
-      return 1 unless object_handle && event_handlers
+      return EVENT_RESULT_CONTINUE unless object_handle && event_handlers
 
       per_widget = event_handlers[object_handle.address]
-      return 1 unless per_widget
+      return EVENT_RESULT_CONTINUE unless per_widget
 
       handlers = per_widget[event_type]
-      return 1 unless handlers && !handlers.empty?
+      return EVENT_RESULT_CONTINUE unless handlers && !handlers.empty?
 
       results = handlers.map { |handler| handler.call(payload) }
-      results.any? { |result| result == false || result == :ignore } ? 0 : 1
+      return EVENT_RESULT_CONSUME if results.any? { |result| result == true || result == :consume }
+      return EVENT_RESULT_IGNORE if results.any? { |result| result == false || result == :ignore }
+
+      EVENT_RESULT_CONTINUE
     end
 
     def dispatch_signal(signal_handlers, object_handle, signal_index, payload)

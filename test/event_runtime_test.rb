@@ -203,7 +203,7 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
 
     result = Qt::EventRuntimeDispatch.dispatch_event(handlers, ptr, Qt::EventWheel, { type: Qt::EventWheel })
 
-    assert_equal 0, result
+    assert_equal Qt::EventRuntimeDispatch::EVENT_RESULT_IGNORE, result
   end
 
   def test_event_dispatch_return_value_symbol_ignore_marks_event_ignored
@@ -212,7 +212,25 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
 
     result = Qt::EventRuntimeDispatch.dispatch_event(handlers, ptr, Qt::EventWheel, { type: Qt::EventWheel })
 
-    assert_equal 0, result
+    assert_equal Qt::EventRuntimeDispatch::EVENT_RESULT_IGNORE, result
+  end
+
+  def test_event_dispatch_return_value_true_marks_event_consumed
+    ptr = FFI::Pointer.new(0x1234)
+    handlers = { ptr.address => { Qt::EventWheel => [->(_payload) { true }] } }
+
+    result = Qt::EventRuntimeDispatch.dispatch_event(handlers, ptr, Qt::EventWheel, { type: Qt::EventWheel })
+
+    assert_equal Qt::EventRuntimeDispatch::EVENT_RESULT_CONSUME, result
+  end
+
+  def test_event_dispatch_return_value_symbol_consume_marks_event_consumed
+    ptr = FFI::Pointer.new(0x1234)
+    handlers = { ptr.address => { Qt::EventWheel => [->(_payload) { :consume }] } }
+
+    result = Qt::EventRuntimeDispatch.dispatch_event(handlers, ptr, Qt::EventWheel, { type: Qt::EventWheel })
+
+    assert_equal Qt::EventRuntimeDispatch::EVENT_RESULT_CONSUME, result
   end
 
   def test_resize_event_end_to_end
