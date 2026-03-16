@@ -9,6 +9,7 @@
 #include <QObject>
 #include <QPoint>
 #include <QResizeEvent>
+#include <QWheelEvent>
 #include <QByteArray>
 #include <QWidget>
 #include <cstdio>
@@ -117,6 +118,8 @@ const char* event_name(int et) {
       return "Leave";
     case QEvent::Resize:
       return "Resize";
+    case QEvent::Wheel:
+      return "Wheel";
     default:
       return "Other";
   }
@@ -161,6 +164,7 @@ bool supports_ancestor_dispatch(int event_type) {
     case QEvent::FocusOut:
     case QEvent::Enter:
     case QEvent::Leave:
+    case QEvent::Wheel:
       return true;
     default:
       return false;
@@ -253,12 +257,23 @@ class EventFilter : public QObject {
         d = resize_event->oldSize().height();
         break;
       }
+      case QEvent::Wheel: {
+        auto* wheel_event = static_cast<QWheelEvent*>(event);
+        a = wheel_event->pixelDelta().y();
+        b = wheel_event->angleDelta().y();
+        c = static_cast<int>(wheel_event->buttons());
+        d = 0;
+        break;
+      }
       default:
         break;
     }
 
     log_event_dispatch(watched, dispatch_target, et, event->isAccepted(), "dispatch");
-    event_callback_ref()(dispatch_target, et, a, b, c, d);
+    const int callback_result = event_callback_ref()(dispatch_target, et, a, b, c, d);
+    if (callback_result == 0) {
+      event->ignore();
+    }
     return QObject::eventFilter(watched, event);
   }
 };

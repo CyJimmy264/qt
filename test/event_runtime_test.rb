@@ -126,8 +126,15 @@ class QtEventRuntimeApiTest < Minitest::Test
       button = QPushButton.new(window)
 
       assert_raises(ArgumentError) { window.on(:not_a_real_event) { |_ev| nil } }
+      assert_equal window, window.on(:wheel) { |_ev| nil }
+      assert_equal window, window.off_event(:wheel)
       assert_raises(ArgumentError) { button.connect('') { |_payload| nil } }
     end
+  end
+
+  def test_event_type_lookup_uses_generated_qevent_map
+    assert_equal Qt::EventWheel, Qt::EventRuntime.event_type_for(:wheel)
+    assert_equal Qt::EventMouseButtonDblClick, Qt::EventRuntime.event_type_for(:mouse_button_dbl_click)
   end
 
   def test_signal_resolution_requires_valid_signature
@@ -159,6 +166,30 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
 
   def test_event_payload_contract_for_resize_event
     assert_payload_forwarding(Qt::EventResize, [640, 360, 320, 180])
+  end
+
+  def test_event_payload_contract_for_wheel_event
+    captured = assert_payload_forwarding(Qt::EventWheel, [4, 120, 0, 0])
+    assert_equal 4, captured[:pixel_delta_y]
+    assert_equal 120, captured[:angle_delta_y]
+  end
+
+  def test_event_dispatch_return_value_false_marks_event_ignored
+    ptr = FFI::Pointer.new(0x1234)
+    handlers = { ptr.address => { Qt::EventWheel => [->(_payload) { false }] } }
+
+    result = Qt::EventRuntimeDispatch.dispatch_event(handlers, ptr, Qt::EventWheel, { type: Qt::EventWheel })
+
+    assert_equal 0, result
+  end
+
+  def test_event_dispatch_return_value_symbol_ignore_marks_event_ignored
+    ptr = FFI::Pointer.new(0x1234)
+    handlers = { ptr.address => { Qt::EventWheel => [->(_payload) { :ignore }] } }
+
+    result = Qt::EventRuntimeDispatch.dispatch_event(handlers, ptr, Qt::EventWheel, { type: Qt::EventWheel })
+
+    assert_equal 0, result
   end
 
   def test_resize_event_end_to_end
@@ -418,6 +449,11 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
     callback.call(ptr, event_type, *values)
 
     assert_equal 1, captured.length
-    assert_equal({ type: event_type, a: values[0], b: values[1], c: values[2], d: values[3] }, captured.first)
+    assert_equal event_type, captured.first[:type]
+    assert_equal values[0], captured.first[:a]
+    assert_equal values[1], captured.first[:b]
+    assert_equal values[2], captured.first[:c]
+    assert_equal values[3], captured.first[:d]
+    captured.first
   end
 end

@@ -77,13 +77,7 @@ module Qt
 
     def event_type_for(event_name)
       key = event_name.to_sym
-      map = {
-        mouse_button_press: Qt::EventMouseButtonPress, mouse_button_release: Qt::EventMouseButtonRelease,
-        mouse_move: Qt::EventMouseMove, key_press: Qt::EventKeyPress, key_release: Qt::EventKeyRelease,
-        focus_in: Qt::EventFocusIn, focus_out: Qt::EventFocusOut, enter: Qt::EventEnter,
-        leave: Qt::EventLeave, resize: Qt::EventResize
-      }
-      event_type = map[key]
+      event_type = Qt::GENERATED_EVENT_TYPES[key]
       raise ArgumentError, "unknown event: #{event_name.inspect}" unless event_type
 
       event_type
@@ -93,10 +87,10 @@ module Qt
       return if @event_callback
 
       @event_callback = FFI::Function.new(
-        :void, %i[pointer int int int int int]
+        :int, %i[pointer int int int int int]
       ) do |object_handle, event_type, *args|
         a, b, c, d = args
-        payload = { type: event_type, a: a, b: b, c: c, d: d }
+        payload = build_event_payload(event_type, a, b, c, d)
         EventRuntimeDispatch.dispatch_event(@event_handlers, object_handle, event_type, payload)
       end
 
@@ -118,6 +112,13 @@ module Qt
       return nil if widget.nil?
 
       widget.respond_to?(:handle) ? widget.handle : widget
+    end
+
+    def build_event_payload(event_type, a, b, c, d)
+      payload = { type: event_type, a: a, b: b, c: c, d: d }
+      return payload unless event_type == Qt::EventWheel
+
+      payload.merge(pixel_delta_y: a, angle_delta_y: b)
     end
 
     def ensure_native_bridge_ready!

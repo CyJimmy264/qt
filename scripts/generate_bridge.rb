@@ -1017,6 +1017,30 @@ def collect_qt_namespace_enum_constants(ast, warnings = [])
   constants
 end
 
+def qevent_symbol_name(name)
+  to_snake(name).to_sym
+end
+
+def collect_qevent_symbol_map(ast, warnings = [])
+  symbol_map = {}
+
+  collect_enum_constants_for_scope(ast, ['QEvent'], warnings).each do |name, value|
+    symbol_name = qevent_symbol_name(name)
+    existing = symbol_map[symbol_name]
+    if existing.nil?
+      symbol_map[symbol_name] = { constant_name: "Event#{name}", value: value }
+      next
+    end
+
+    next if existing[:value] == value && existing[:constant_name] == "Event#{name}"
+
+    warnings << "Qt::QEventSymbolMap: #{symbol_name}=Event#{name}(#{value}) conflicts with existing " \
+                "#{existing[:constant_name]}(#{existing[:value]}); keeping existing #{existing[:constant_name]}"
+  end
+
+  symbol_map
+end
+
 def collect_qt_scoped_enum_constants(ast, warnings = [])
   constants_by_owner = Hash.new { |h, k| h[k] = {} }
 
@@ -1059,6 +1083,7 @@ def generate_ruby_constants(ast)
   warnings = []
   constants = collect_qt_namespace_enum_constants(ast, warnings)
   scoped_constants = collect_qt_scoped_enum_constants(ast, warnings)
+  event_symbol_map = collect_qevent_symbol_map(ast, warnings)
   emit_generation_warnings(warnings)
   lines = ['# frozen_string_literal: true', '', 'module Qt']
 
@@ -1076,6 +1101,12 @@ def generate_ruby_constants(ast)
     lines << '    },'
   end
   lines << '  }.freeze unless const_defined?(:GENERATED_SCOPED_CONSTANTS, false)'
+  lines << ''
+  lines << '  GENERATED_EVENT_TYPES = {'
+  event_symbol_map.sort.each do |symbol_name, entry|
+    lines << "    #{symbol_name.inspect} => #{entry[:constant_name]},"
+  end
+  lines << '  }.freeze unless const_defined?(:GENERATED_EVENT_TYPES, false)'
 
   lines << 'end'
   "#{lines.join("\n")}\n"

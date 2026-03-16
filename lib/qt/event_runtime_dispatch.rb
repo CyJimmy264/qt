@@ -7,15 +7,16 @@ module Qt
     module_function
 
     def dispatch_event(event_handlers, object_handle, event_type, payload)
-      return unless object_handle && event_handlers
+      return 1 unless object_handle && event_handlers
 
       per_widget = event_handlers[object_handle.address]
-      return unless per_widget
+      return 1 unless per_widget
 
       handlers = per_widget[event_type]
-      return unless handlers && !handlers.empty?
+      return 1 unless handlers && !handlers.empty?
 
-      handlers.each { |handler| handler.call(payload) }
+      results = handlers.map { |handler| handler.call(payload) }
+      results.any? { |result| result == false || result == :ignore } ? 0 : 1
     end
 
     def dispatch_signal(signal_handlers, object_handle, signal_index, payload)

@@ -29,7 +29,7 @@ packaging/rpm/.rpmbuild/SRPMS/*.src.rpm
 ```
 
 By default, SRPM is built with neutral `dist` (`--define "dist %{nil}"`),
-so file names are distro-agnostic (for example `ruby-qt-0.1.4-1.src.rpm`).
+so file names are distro-agnostic (for example `ruby-qt-0.1.5-1.src.rpm`).
 
 ## Submit build to COPR
 

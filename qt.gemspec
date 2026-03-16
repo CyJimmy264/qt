@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |spec|
   spec.name          = 'qt'
-  spec.version       = '0.1.4'
+  spec.version       = '0.1.5'
   spec.authors       = ['Maksim Veynberg']
   spec.email         = ['mv@cj264.ru']
 
@@ -27,7 +27,7 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency 'ffi', '~> 1.17'
   spec.metadata['source_code_uri'] = spec.homepage
-  spec.metadata['changelog_uri'] = "#{spec.homepage}/releases"
+  spec.metadata['changelog_uri'] = "#{spec.homepage}/blob/master/CHANGELOG.md"
   spec.metadata['bug_tracker_uri'] = "#{spec.homepage}/issues"
   spec.metadata['rubygems_mfa_required'] = 'true'
 end
