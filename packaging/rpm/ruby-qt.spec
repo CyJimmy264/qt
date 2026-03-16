@@ -1,5 +1,5 @@
 Name:           ruby-qt
-Version:        0.1.5
+Version:        0.1.6
 Release:        1%{?dist}
 Summary:        Ruby bindings for Qt 6 with generated native bridge
 
@@ -107,6 +107,13 @@ find %{buildroot} -type f -name qt_ruby_bridge.so -exec /usr/bin/chrpath -d {} \
 %{gem_dir}/extensions
 
 %changelog
+* Mon Mar 16 2026 Maksim Veynberg <mv@cj264.ru> - 0.1.6-1
+- Generate event payload schemas and switch event runtime callbacks to JSON payload delivery
+- Expand generated event payload coverage for additional event families
+- Derive event payload classes without regex rules and prefer more specific deterministic family matching
+- Add consume semantics for event runtime callbacks
+- Add end-to-end runtime coverage for move/show/hide/close lifecycle events
+
 * Mon Mar 16 2026 Maksim Veynberg <mv@cj264.ru> - 0.1.5-1
 - Add wheel event runtime support with ignore hook
 - Derive event runtime mappings from QEvent enums during generation
