@@ -1,24 +1,5 @@
 # frozen_string_literal: true
 
-EVENT_PAYLOAD_CLASS_RULES = [
-  { pattern: /\A(?:MouseButtonPress|MouseButtonRelease|MouseButtonDblClick|MouseMove|NonClientAreaMouseButtonPress|NonClientAreaMouseButtonRelease|NonClientAreaMouseButtonDblClick|NonClientAreaMouseMove)\z/, class_name: 'QMouseEvent' },
-  { pattern: /\A(?:KeyPress|KeyRelease)\z/, class_name: 'QKeyEvent' },
-  { pattern: /\AWheel\z/, class_name: 'QWheelEvent' },
-  { pattern: /\AEnter\z/, class_name: 'QEnterEvent' },
-  { pattern: /\AResize\z/, class_name: 'QResizeEvent' },
-  { pattern: /\A(?:FocusIn|FocusOut|FocusAboutToChange)\z/, class_name: 'QFocusEvent' },
-  { pattern: /\AMove\z/, class_name: 'QMoveEvent' },
-  { pattern: /\AClose\z/, class_name: 'QCloseEvent' },
-  { pattern: /\AShow\z/, class_name: 'QShowEvent' },
-  { pattern: /\AHide\z/, class_name: 'QHideEvent' },
-  { pattern: /\AContextMenu\z/, class_name: 'QContextMenuEvent' },
-  { pattern: /\AHover(?:Enter|Move|Leave)\z/, class_name: 'QHoverEvent' },
-  { pattern: /\ADragEnter\z/, class_name: 'QDragEnterEvent' },
-  { pattern: /\ADragMove\z/, class_name: 'QDragMoveEvent' },
-  { pattern: /\ADragLeave\z/, class_name: 'QDragLeaveEvent' },
-  { pattern: /\ADrop\z/, class_name: 'QDropEvent' }
-].freeze
-
 EVENT_PAYLOAD_COMPATIBILITY_ALIASES = {
   'QMouseEvent' => { a: :x, b: :y, c: :button, d: :buttons },
   'QKeyEvent' => { a: :key, b: :modifiers, c: :is_auto_repeat, d: :count },
@@ -32,9 +13,81 @@ EVENT_PAYLOAD_EXCLUDED_METHODS = %w[
 
 EVENT_PAYLOAD_SUPPORTED_COMPLEX_TYPES = %w[QPoint QPointF QSize].freeze
 
-def resolve_event_payload_class_name(event_name)
-  rule = EVENT_PAYLOAD_CLASS_RULES.find { |entry| event_name.match?(entry[:pattern]) }
-  rule && rule[:class_name]
+def event_payload_class_names(ast)
+  @event_payload_class_names ||= {}.compare_by_identity
+  return @event_payload_class_names[ast] if @event_payload_class_names.key?(ast)
+
+  index = ast_class_index(ast)
+  @event_payload_class_names[ast] = index[:methods_by_class].keys.select do |class_name|
+    class_name.start_with?('Q') && class_name.end_with?('Event') && class_inherits?(ast, class_name, 'QEvent')
+  end.sort
+end
+
+def event_payload_ctor_type_param?(ctor_decl)
+  Array(ctor_decl['inner']).any? do |node|
+    next false unless node['kind'] == 'ParmVarDecl'
+
+    raw_type = node.dig('type', 'desugaredQualType') || node.dig('type', 'qualType')
+    name = node['name']
+    %w[type t].include?(name) && %w[Type QEvent::Type].include?(raw_type)
+  end
+end
+
+def event_payload_type_family_class_names(ast)
+  @event_payload_type_family_class_names ||= {}.compare_by_identity
+  return @event_payload_type_family_class_names[ast] if @event_payload_type_family_class_names.key?(ast)
+
+  @event_payload_type_family_class_names[ast] = event_payload_class_names(ast).select do |class_name|
+    collect_constructor_decls(ast, class_name).any? { |decl| event_payload_ctor_type_param?(decl) }
+  end
+end
+
+def event_payload_class_stem(class_name)
+  class_name.sub(/\AQ/, '').sub(/Event\z/, '')
+end
+
+def event_payload_camel_tokens(name)
+  name.to_s.scan(/[A-Z]+(?=[A-Z][a-z]|\z)|[A-Z]?[a-z]+|\d+/)
+end
+
+def event_payload_family_score(event_name, class_name)
+  event_tokens = event_payload_camel_tokens(event_name)
+  class_tokens = event_payload_camel_tokens(event_payload_class_stem(class_name))
+  return 0 if event_tokens.empty? || class_tokens.empty?
+
+  event_downcase = event_tokens.map(&:downcase)
+  class_downcase = class_tokens.map(&:downcase)
+  overlap = (event_downcase & class_downcase).length
+  return 0 if overlap.zero?
+
+  score = overlap * 10
+  score += 5 if event_downcase.first == class_downcase.first
+  score += 3 if event_downcase.last == class_downcase.last
+  score += 2 if event_downcase.join.include?(class_downcase.join)
+  score += 1 if class_downcase.join.include?(event_downcase.join)
+  score
+end
+
+def resolve_event_payload_class_name(ast, event_name, warnings = [])
+  exact_class_name = "Q#{event_name}Event"
+  return exact_class_name if event_payload_class_names(ast).include?(exact_class_name)
+
+  candidates = event_payload_type_family_class_names(ast).filter_map do |class_name|
+    score = event_payload_family_score(event_name, class_name)
+    next if score.zero?
+
+    { class_name: class_name, score: score }
+  end
+  return nil if candidates.empty?
+
+  best_score = candidates.map { |entry| entry[:score] }.max
+  best = candidates.select { |entry| entry[:score] == best_score }
+  if best.length > 1
+    warnings << "Qt::EventPayload: ambiguous family match for #{event_name}: #{best.map { |entry| entry[:class_name] }.sort.join(', ')}"
+    return nil
+  end
+
+  best.first[:class_name]
 end
 
 def supported_event_payload_return?(return_type, int_cast_types)
@@ -138,7 +191,7 @@ def event_payload_compatibility_fields(class_name, field_names)
 end
 
 def collect_event_payload_schema_for(ast, event_name, event_value, int_cast_types, warnings)
-  class_name = resolve_event_payload_class_name(event_name)
+  class_name = resolve_event_payload_class_name(ast, event_name, warnings)
   return nil if class_name.nil?
   return nil unless ast_class_index(ast)[:methods_by_class].key?(class_name)
 

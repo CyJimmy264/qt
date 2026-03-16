@@ -146,6 +146,9 @@ class QtEventRuntimeApiTest < Minitest::Test
   end
 
   def test_generated_event_payload_schema_covers_phase_two_event_families
+    assert_equal 'QMouseEvent', Qt::GENERATED_EVENT_PAYLOAD_SCHEMAS[:mouse_button_press][:event_class]
+    assert_equal 'QKeyEvent', Qt::GENERATED_EVENT_PAYLOAD_SCHEMAS[:key_press][:event_class]
+    assert_equal 'QFocusEvent', Qt::GENERATED_EVENT_PAYLOAD_SCHEMAS[:focus_out][:event_class]
     assert_equal 'QEnterEvent', Qt::GENERATED_EVENT_PAYLOAD_SCHEMAS[:enter][:event_class]
     assert_equal 'QContextMenuEvent', Qt::GENERATED_EVENT_PAYLOAD_SCHEMAS[:context_menu][:event_class]
     assert_equal 'QHoverEvent', Qt::GENERATED_EVENT_PAYLOAD_SCHEMAS[:hover_move][:event_class]
