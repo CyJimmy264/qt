@@ -16,6 +16,8 @@ module QtEventRuntimeTestHelpers
   def reset_event_runtime_state
     Qt::EventRuntime.instance_variable_set(:@event_handlers, nil)
     Qt::EventRuntime.instance_variable_set(:@signal_handlers, nil)
+    Qt::EventRuntime.instance_variable_set(:@internal_signal_handlers, nil)
+    Qt::EventRuntime.instance_variable_set(:@signal_registrations, nil)
     Qt::EventRuntime.instance_variable_set(:@event_callback, nil)
     Qt::EventRuntime.instance_variable_set(:@signal_callback, nil)
   end

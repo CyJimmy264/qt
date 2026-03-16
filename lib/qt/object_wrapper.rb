@@ -5,14 +5,24 @@ module Qt
   module ObjectWrapper
     module_function
 
+    module ConstructorCacheHook
+      def initialize(*args, &block)
+        super
+        Qt::ObjectWrapper.register_wrapper(self)
+      end
+    end
+
     def wrap(pointer, expected_qt_class = nil)
       return nil if null_pointer?(pointer)
       return pointer if pointer.respond_to?(:handle)
 
+      cached = cached_wrapper_for(pointer)
+      return cached if cached
+
       klass = resolve_wrapper_class(pointer, expected_qt_class) || fallback_wrapper_class(expected_qt_class)
       return pointer unless klass
 
-      instantiate_wrapper(klass, pointer)
+      register_wrapper(instantiate_wrapper(klass, pointer))
     end
 
     def null_pointer?(pointer)
@@ -62,6 +72,75 @@ module Qt
       wrapped.instance_variable_set(:@handle, pointer)
       wrapped.init_children_tracking! if wrapped.respond_to?(:init_children_tracking!, true)
       wrapped
+    end
+
+    def cached_wrapper_for(pointer)
+      wrapper_cache[pointer.address]
+    end
+
+    def register_wrapper(wrapper)
+      return wrapper unless wrapper.respond_to?(:handle)
+
+      pointer = wrapper.handle
+      return wrapper if null_pointer?(pointer)
+
+      cached = cached_wrapper_for(pointer)
+      return cached if cached
+
+      cache_wrapper(wrapper)
+    end
+
+    def cache_wrapper(wrapper)
+      pointer = wrapper.handle
+      wrapper_cache[pointer.address] = wrapper
+      ensure_destroy_hook(wrapper, pointer)
+      wrapper
+    end
+
+    def invalidate_cached_wrapper(pointer_or_address, expected_wrapper = nil)
+      address = pointer_or_address.is_a?(Integer) ? pointer_or_address : pointer_or_address.address
+      cached = wrapper_cache[address]
+      return unless cached
+      return if expected_wrapper && !cached.equal?(expected_wrapper)
+
+      wrapper_cache.delete(address)
+    end
+
+    def reset_cache!
+      @wrapper_cache = {}
+      @destroy_hook_addresses = {}
+    end
+
+    def install_constructor_cache_hooks!
+      qobject_wrapper_classes.each do |klass|
+        next if klass.instance_variable_defined?(:@__qt_object_wrapper_constructor_hook_installed)
+
+        klass.prepend(ConstructorCacheHook)
+        klass.instance_variable_set(:@__qt_object_wrapper_constructor_hook_installed, true)
+      end
+    end
+
+    def wrapper_cache
+      @wrapper_cache ||= {}
+    end
+
+    def destroy_hook_addresses
+      @destroy_hook_addresses ||= {}
+    end
+
+    def ensure_destroy_hook(wrapper, pointer)
+      address = pointer.address
+      return if destroy_hook_addresses[address]
+
+      destroy_hook_addresses[address] = true
+      Qt::EventRuntime.on_internal_signal(pointer, 'destroyed()') do |_payload|
+        destroy_hook_addresses.delete(address)
+        Qt::EventRuntime.clear_signal_registrations_for_address(address)
+        invalidate_cached_wrapper(address, wrapper)
+      end
+    rescue StandardError
+      destroy_hook_addresses.delete(address)
+      raise
     end
 
     def inheritance_depth(klass)

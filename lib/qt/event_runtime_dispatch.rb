@@ -26,8 +26,15 @@ module Qt
       EVENT_RESULT_CONTINUE
     end
 
-    def dispatch_signal(signal_handlers, object_handle, signal_index, payload)
-      return unless object_handle && signal_handlers
+    def dispatch_signal(internal_signal_handlers, signal_handlers, object_handle, signal_index, payload)
+      return unless object_handle
+
+      dispatch_signal_store(signal_handlers, object_handle, signal_index, payload)
+      dispatch_signal_store(internal_signal_handlers, object_handle, signal_index, payload)
+    end
+
+    def dispatch_signal_store(signal_handlers, object_handle, signal_index, payload)
+      return unless signal_handlers
 
       per_widget = signal_handlers[object_handle.address]
       return unless per_widget
@@ -36,7 +43,7 @@ module Qt
         next unless entry[:index] == signal_index
 
         typed_payload = Qt::DateTimeCodec.decode_for_signal(signal_name, payload)
-        entry[:blocks].each { |handler| handler.call(typed_payload) }
+        entry[:blocks].dup.each { |handler| handler.call(typed_payload) }
       end
     end
   end

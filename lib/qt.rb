@@ -34,6 +34,7 @@ require_relative 'qt/event_runtime_qobject_methods'
 require_relative 'qt/event_runtime'
 require GENERATED_EVENT_PAYLOADS
 require GENERATED_WIDGETS
+Qt::ObjectWrapper.install_constructor_cache_hooks!
 require_relative 'qt/shortcut_compat'
 Qt::GeneratedConstantsRuntime.apply_generated_scoped_constants!(Qt)
 

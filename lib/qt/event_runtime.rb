@@ -30,22 +30,30 @@ module Qt
       ensure_signal_callback!
 
       handle = widget_handle(widget) || raise(ArgumentError, 'widget handle is required')
-      per_signal = prepare_signal_registration(handle, signal_name)
+      per_signal = prepare_signal_registration(@signal_handlers ||= {}, handle, signal_name)
       per_signal[:blocks] << block
       true
     end
 
-    def prepare_signal_registration(handle, signal_name)
+    def on_internal_signal(widget, signal_name, &block)
+      raise ArgumentError, 'pass block to on_internal_signal' unless block
+
+      ensure_native_bridge_ready!
+      ensure_signal_callback!
+
+      handle = widget_handle(widget) || raise(ArgumentError, 'widget handle is required')
+      per_signal = prepare_signal_registration(@internal_signal_handlers ||= {}, handle, signal_name)
+      per_signal[:blocks] << block
+      true
+    end
+
+    def prepare_signal_registration(signal_store, handle, signal_name)
       signal_key = signal_name.to_s
       raise ArgumentError, 'signal name is required' if signal_key.empty?
 
-      @signal_handlers ||= {}
-      per_signal = ((@signal_handlers[handle.address] ||= {})[signal_key] ||= { index: nil, blocks: [] })
+      per_signal = ((signal_store[handle.address] ||= {})[signal_key] ||= { index: nil, blocks: [] })
       if per_signal[:index].nil?
-        index = Qt::Native.qobject_connect_signal(handle, signal_key)
-        raise ArgumentError, "failed to connect signal #{signal_key.inspect} (code=#{index})" if index.negative?
-
-        per_signal[:index] = index
+        per_signal[:index] = acquire_signal_registration(handle, signal_key)
       end
       per_signal
     end
@@ -59,9 +67,14 @@ module Qt
       return false if per_widget.nil?
 
       signal_key = signal_name&.to_s
-      per_widget.delete(signal_key) if signal_key
-      per_widget.clear unless signal_key
-      Qt::Native.qobject_disconnect_signal(handle, signal_key)
+      if signal_key
+        per_widget.delete(signal_key)
+        release_signal_registration(handle, signal_key)
+      else
+        per_widget.keys.each { |registered_signal| release_signal_registration(handle, registered_signal) }
+        per_widget.clear
+      end
+      @signal_handlers.delete(handle.address) if per_widget.empty?
       true
     end
 
@@ -103,7 +116,9 @@ module Qt
 
       @signal_callback = FFI::Function.new(:void, %i[pointer int string]) do |object_handle, signal_index, payload|
         normalized_payload = payload.nil? ? nil : Qt::StringCodec.from_qt_text(payload)
-        EventRuntimeDispatch.dispatch_signal(@signal_handlers, object_handle, signal_index, normalized_payload)
+        EventRuntimeDispatch.dispatch_signal(
+          @internal_signal_handlers, @signal_handlers, object_handle, signal_index, normalized_payload
+        )
       end
 
       Qt::Native.set_signal_callback(@signal_callback)
@@ -140,6 +155,43 @@ module Qt
         per_widget.each_key { |event_type| Qt::Native.unwatch_qobject_event(handle, event_type) }
         @event_handlers.delete(handle.address)
       end
+    end
+
+    def acquire_signal_registration(handle, signal_key)
+      @signal_registrations ||= {}
+      per_widget = (@signal_registrations[handle.address] ||= {})
+      registration = (per_widget[signal_key] ||= { index: nil, refcount: 0 })
+      if registration[:index].nil?
+        index = Qt::Native.qobject_connect_signal(handle, signal_key)
+        raise ArgumentError, "failed to connect signal #{signal_key.inspect} (code=#{index})" if index.negative?
+
+        registration[:index] = index
+      end
+      registration[:refcount] += 1
+      registration[:index]
+    end
+
+    def release_signal_registration(handle, signal_key)
+      return if @signal_registrations.nil?
+
+      per_widget = @signal_registrations[handle.address]
+      return if per_widget.nil?
+
+      registration = per_widget[signal_key]
+      return if registration.nil?
+
+      registration[:refcount] -= 1
+      return if registration[:refcount].positive?
+
+      Qt::Native.qobject_disconnect_signal(handle, signal_key)
+      per_widget.delete(signal_key)
+      @signal_registrations.delete(handle.address) if per_widget.empty?
+    end
+
+    def clear_signal_registrations_for_address(address)
+      @signal_handlers&.delete(address)
+      @internal_signal_handlers&.delete(address)
+      @signal_registrations&.delete(address)
     end
   end
 end

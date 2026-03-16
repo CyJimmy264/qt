@@ -6,6 +6,18 @@ require 'rbconfig'
 require 'date'
 
 class QtBindingsTest < Minitest::Test
+  def setup
+    Qt::ObjectWrapper.reset_cache!
+    Qt::EventRuntime.instance_variable_set(:@internal_signal_handlers, nil)
+    Qt::EventRuntime.instance_variable_set(:@signal_registrations, nil)
+  end
+
+  def teardown
+    Qt::ObjectWrapper.reset_cache!
+    Qt::EventRuntime.instance_variable_set(:@internal_signal_handlers, nil)
+    Qt::EventRuntime.instance_variable_set(:@signal_registrations, nil)
+  end
+
   def test_version_present
     refute_nil Qt::VERSION
   end
@@ -188,6 +200,92 @@ class QtBindingsTest < Minitest::Test
       assert_kind_of QLineEdit, child
       assert_equal 'child_input', child.object_name
       assert_nil window.child_at(200, 100)
+    end
+  end
+
+  def test_qobject_parent_wrapper_has_stable_identity
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      parent = QWidget.new
+      child = QLineEdit.new(parent)
+
+      a = child.parent
+      b = child.parent
+
+      assert a.equal?(b)
+      assert a.equal?(parent)
+    end
+  end
+
+  def test_qwidget_child_at_wrapper_preserves_ruby_ivars_across_rewrapping
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      window = QWidget.new
+      child = QLineEdit.new(window)
+      child.set_geometry(20, 20, 100, 24)
+      window.set_geometry(0, 0, 240, 120)
+      window.show
+      QApplication.process_events
+
+      a = window.child_at(25, 25)
+      a.instance_variable_set(:@foo, 123)
+      b = window.child_at(25, 25)
+
+      assert a.equal?(child)
+      assert a.equal?(b)
+      assert_equal 123, b.instance_variable_get(:@foo)
+    end
+  end
+
+  def test_focus_widget_wrappers_share_canonical_identity
+    skip 'native bridge is not available' unless Qt::Native.available?
+    skip 'QApplication.focus_widget is not available in this generated scope' unless QApplication.respond_to?(:focus_widget)
+
+    with_qapplication do
+      window = QWidget.new
+      input = QLineEdit.new(window)
+      input.set_geometry(10, 10, 120, 30)
+      window.set_geometry(0, 0, 240, 120)
+      window.show
+      input.set_focus
+      QApplication.process_events
+
+      from_window = window.focus_widget
+      from_app = QApplication.focus_widget
+      from_window.instance_variable_set(:@focus_marker, 'ok')
+
+      assert from_window.equal?(input)
+      assert from_window.equal?(from_app)
+      assert_equal 'ok', from_app.instance_variable_get(:@focus_marker)
+    end
+  end
+
+  def test_object_wrapper_cache_is_cleared_after_destroyed
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      window = QWidget.new
+      window.set_attribute(Qt::WA_DeleteOnClose, 1)
+      window.set_geometry(0, 0, 240, 120)
+      window.show
+      QApplication.process_events
+
+      wrapped = Qt::ObjectWrapper.wrap(window.handle, 'QWidget')
+      address = wrapped.handle.address
+      wrapped.instance_variable_set(:@foo, 123)
+
+      window.close
+      20.times do
+        QApplication.process_events
+        QApplication.send_posted_events if QApplication.respond_to?(:send_posted_events)
+        break unless Qt::ObjectWrapper.instance_variable_get(:@wrapper_cache)&.key?(address)
+
+        sleep(0.005)
+      end
+
+      refute Qt::ObjectWrapper.instance_variable_get(:@wrapper_cache)&.key?(address)
     end
   end
 

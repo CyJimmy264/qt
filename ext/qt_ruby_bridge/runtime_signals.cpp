@@ -1,6 +1,7 @@
 #include "qt_ruby_runtime.hpp"
 
 #include <QByteArray>
+#include <QCoreApplication>
 #include <QDateTimeEdit>
 #include <QMetaMethod>
 #include <QObject>
@@ -27,6 +28,11 @@ using SignalHandlersByIndex = std::unordered_map<int, std::vector<SignalHandler>
 std::unordered_map<QObject*, SignalHandlersByIndex>& signal_handlers() {
   static std::unordered_map<QObject*, SignalHandlersByIndex> handlers;
   return handlers;
+}
+
+QObject* signal_callback_context() {
+  static QObject fallback_context;
+  return QCoreApplication::instance() ? static_cast<QObject*>(QCoreApplication::instance()) : &fallback_context;
 }
 
 int resolve_signal_index(QObject* obj, const char* signal_name) {
@@ -122,7 +128,25 @@ int QtRubyRuntime::qobject_connect_signal(void* object_handle, const char* signa
   }
 
   const QMetaMethod signal_method = obj->metaObject()->method(signal_index);
-  auto* mapper = new QSignalMapper(obj);
+  if (signal_method.name() == "destroyed") {
+    QMetaObject::Connection direct_connection =
+        QObject::connect(obj, &QObject::destroyed, signal_callback_context(), [obj, signal_index](QObject*) {
+          if (!signal_callback_ref()) {
+            return;
+          }
+          signal_callback_ref()(obj, signal_index, signal_payload_for(obj, signal_index));
+        });
+
+    if (!direct_connection) {
+      return -4;
+    }
+
+    auto& by_index = signal_handlers()[obj];
+    by_index[signal_index].push_back(SignalHandler{signal_index, direct_connection, {}, nullptr});
+    return signal_index;
+  }
+
+  auto* mapper = new QSignalMapper(QCoreApplication::instance());
   mapper->setMapping(obj, signal_index);
 
   const int map_slot_index = mapper->metaObject()->indexOfSlot("map()");
@@ -145,6 +169,8 @@ int QtRubyRuntime::qobject_connect_signal(void* object_handle, const char* signa
         }
         signal_callback_ref()(obj, mapped_signal_index, signal_payload_for(obj, mapped_signal_index));
       });
+
+  QObject::connect(obj, &QObject::destroyed, mapper, [mapper]() { mapper->deleteLater(); });
 
   if (!mapped_connection) {
     QObject::disconnect(signal_connection);

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## [Unreleased]
+
+### Changed
+
+- Keep canonical Ruby wrapper identity for `QObject`-derived native handles by caching wrappers per native object, reusing them across wrapping paths such as `parent`, `child_at`, and `focus_widget`, and invalidating the cache on `QObject::destroyed`.
+- Share native signal registrations between internal bridge hooks and user callbacks so internal lifecycle hooks do not duplicate user signal delivery.
+
 ## [0.1.6] - 2026-03-16
 
 ### Added
