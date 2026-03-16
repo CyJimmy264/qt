@@ -82,6 +82,24 @@ def event_payload_family_match?(event_name, class_name, mode)
   end
 end
 
+def event_payload_most_specific_class_names(ast, class_names)
+  class_names.reject do |class_name|
+    class_names.any? do |other|
+      next false if other == class_name
+
+      class_inherits?(ast, other, class_name)
+    end
+  end
+end
+
+def event_payload_longest_stem_class_names(class_names)
+  stems = class_names.to_h do |class_name|
+    [class_name, event_payload_camel_tokens(event_payload_class_stem(class_name)).length]
+  end
+  longest = stems.values.max
+  class_names.select { |class_name| stems[class_name] == longest }
+end
+
 def resolve_event_payload_family_class_name(ast, event_name, warnings)
   %i[prefix suffix contiguous_tokens compact_substring].each do |mode|
     matches = event_payload_type_family_class_names(ast).select do |class_name|
@@ -89,9 +107,9 @@ def resolve_event_payload_family_class_name(ast, event_name, warnings)
     end
     next if matches.empty?
 
-    if matches.length == 1
-      return matches.first
-    end
+    matches = event_payload_most_specific_class_names(ast, matches)
+    matches = event_payload_longest_stem_class_names(matches)
+    return matches.first if matches.length == 1
 
     warnings << "Qt::EventPayload: ambiguous #{mode} family match for #{event_name}: #{matches.sort.join(', ')}"
     return nil
