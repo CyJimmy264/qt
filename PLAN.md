@@ -33,8 +33,7 @@ Move the bridge toward maximal Qt-derived generation with minimal policy surface
 - Expand auto-derived payload coverage to more event classes.
 - Resolve complex Qt types and duplicated/deprecated getters more cleanly.
 - Refine field-selection policy so payloads do not grow noisy or redundant.
-- Add end-to-end payload assertions for newer event families.
-- Finish end-to-end payload assertions for newly added event classes if still incomplete.
+- Continue end-to-end payload assertions for event families that are not yet reproducible through stable public-API test flows (for example `context_menu`, `hover`, `enter`, drag/drop variants).
 
 ## Phase 3
 

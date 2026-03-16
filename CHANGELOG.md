@@ -10,6 +10,7 @@ The format is based on Keep a Changelog.
 
 - Generate event payload schemas from Qt-derived event classes and switch the native event callback ABI to JSON payload delivery.
 - Expand generated event payload coverage for additional event families, including enter, context menu, hover, drag-and-drop related events.
+- Add end-to-end event runtime delivery coverage for reproducible lifecycle events including move, show, hide, and close.
 
 ### Changed
 

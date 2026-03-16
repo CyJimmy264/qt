@@ -243,6 +243,56 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
     end
   end
 
+  def test_move_event_end_to_end
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      payloads = capture_move_payloads
+      ev = find_move_payload(payloads, 45, 55)
+      skip 'move to target position was not observed in this Qt platform environment' unless ev
+
+      assert_equal Qt::EventMove, ev[:type]
+      assert_equal 45, ev[:x]
+      assert_equal 55, ev[:y]
+    end
+  end
+
+  def test_show_event_end_to_end
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      payloads = capture_show_payloads
+      skip 'show event was not delivered in this Qt platform environment' if payloads.empty?
+
+      assert_operator payloads.length, :>=, 1
+      assert_equal Qt::EventShow, payloads.last[:type]
+    end
+  end
+
+  def test_hide_event_end_to_end
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      payloads = capture_hide_payloads
+      skip 'hide event was not delivered in this Qt platform environment' if payloads.empty?
+
+      assert_operator payloads.length, :>=, 1
+      assert_equal Qt::EventHide, payloads.last[:type]
+    end
+  end
+
+  def test_close_event_end_to_end
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      payloads = capture_close_payloads
+      skip 'close event was not delivered in this Qt platform environment' if payloads.empty?
+
+      assert_operator payloads.length, :>=, 1
+      assert_equal Qt::EventClose, payloads.last[:type]
+    end
+  end
+
   def test_clicked_bool_signal_end_to_end_via_button_click
     skip 'native bridge is not available' unless Qt::Native.available?
 
@@ -444,6 +494,10 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
     payloads.find { |payload| payload[:type] == Qt::EventResize && payload[:width] == width && payload[:height] == height }
   end
 
+  def find_move_payload(payloads, x, y)
+    payloads.find { |payload| payload[:type] == Qt::EventMove && payload[:x] == x && payload[:y] == y }
+  end
+
   def verify_clicked_signal_delivered(calls)
     skip 'clicked(bool) signal was not delivered in this Qt platform environment' if calls.empty?
 
@@ -458,6 +512,45 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
     window.set_geometry(20, 30, 400, 260)
     wait_for_non_empty_payloads(payloads)
     skip 'resize event was not delivered in this Qt platform environment' if payloads.empty?
+    payloads
+  end
+
+  def capture_move_payloads
+    window = QWidget.new
+    payloads = []
+    window.on(:move) { |ev| payloads << ev }
+    show_and_process_events(window)
+    window.move(45, 55)
+    wait_for_non_empty_payloads(payloads)
+    skip 'move event was not delivered in this Qt platform environment' if payloads.empty?
+    payloads
+  end
+
+  def capture_show_payloads
+    window = QWidget.new
+    payloads = []
+    window.on(:show) { |ev| payloads << ev }
+    show_and_process_events(window)
+    payloads
+  end
+
+  def capture_hide_payloads
+    window = QWidget.new
+    payloads = []
+    window.on(:hide) { |ev| payloads << ev }
+    show_and_process_events(window)
+    window.hide
+    wait_for_non_empty_payloads(payloads)
+    payloads
+  end
+
+  def capture_close_payloads
+    window = QWidget.new
+    payloads = []
+    window.on(:close) { |ev| payloads << ev }
+    show_and_process_events(window)
+    window.close
+    wait_for_non_empty_payloads(payloads)
     payloads
   end
 
