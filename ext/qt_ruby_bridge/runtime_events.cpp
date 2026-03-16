@@ -1,22 +1,19 @@
 #include "qt_ruby_runtime.hpp"
 
 #include <QApplication>
+#include <QByteArray>
 #include <QCoreApplication>
 #include <QEvent>
 #include <QEventLoop>
-#include <QKeyEvent>
-#include <QMouseEvent>
 #include <QObject>
-#include <QPoint>
-#include <QResizeEvent>
-#include <QWheelEvent>
-#include <QByteArray>
 #include <QWidget>
 #include <cstdio>
 #include <cstdlib>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
+
+#include "../../build/generated/event_payloads.inc"
 
 namespace QtRubyRuntime {
 EventCallback& event_callback_ref() {
@@ -223,54 +220,9 @@ class EventFilter : public QObject {
       return QObject::eventFilter(watched, event);
     }
 
-    int a = 0;
-    int b = 0;
-    int c = 0;
-    int d = 0;
-
-    switch (event->type()) {
-      case QEvent::MouseButtonPress:
-      case QEvent::MouseButtonRelease:
-      case QEvent::MouseMove: {
-        auto* mouse_event = static_cast<QMouseEvent*>(event);
-        const QPoint p = mouse_event->position().toPoint();
-        a = p.x();
-        b = p.y();
-        c = static_cast<int>(mouse_event->button());
-        d = static_cast<int>(mouse_event->buttons());
-        break;
-      }
-      case QEvent::KeyPress:
-      case QEvent::KeyRelease: {
-        auto* key_event = static_cast<QKeyEvent*>(event);
-        a = key_event->key();
-        b = static_cast<int>(key_event->modifiers());
-        c = key_event->isAutoRepeat() ? 1 : 0;
-        d = key_event->count();
-        break;
-      }
-      case QEvent::Resize: {
-        auto* resize_event = static_cast<QResizeEvent*>(event);
-        a = resize_event->size().width();
-        b = resize_event->size().height();
-        c = resize_event->oldSize().width();
-        d = resize_event->oldSize().height();
-        break;
-      }
-      case QEvent::Wheel: {
-        auto* wheel_event = static_cast<QWheelEvent*>(event);
-        a = wheel_event->pixelDelta().y();
-        b = wheel_event->angleDelta().y();
-        c = static_cast<int>(wheel_event->buttons());
-        d = 0;
-        break;
-      }
-      default:
-        break;
-    }
-
+    const QByteArray payload_json = QtRubyGeneratedEventPayloads::serialize_event_payload(et, event);
     log_event_dispatch(watched, dispatch_target, et, event->isAccepted(), "dispatch");
-    const int callback_result = event_callback_ref()(dispatch_target, et, a, b, c, d);
+    const int callback_result = event_callback_ref()(dispatch_target, et, payload_json.constData());
     if (callback_result == 0) {
       event->ignore();
     }

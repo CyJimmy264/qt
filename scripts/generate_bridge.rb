@@ -13,6 +13,8 @@ CPP_PATH = File.join(GENERATED_DIR, 'qt_ruby_bridge.cpp')
 API_PATH = File.join(GENERATED_DIR, 'bridge_api.rb')
 RUBY_WIDGETS_PATH = File.join(GENERATED_DIR, 'widgets.rb')
 RUBY_CONSTANTS_PATH = File.join(GENERATED_DIR, 'constants.rb')
+RUBY_EVENT_PAYLOADS_PATH = File.join(GENERATED_DIR, 'event_payloads.rb')
+CPP_EVENT_PAYLOADS_PATH = File.join(GENERATED_DIR, 'event_payloads.inc')
 
 # Universal generation policy: class set is discovered from AST per scope.
 GENERATOR_SCOPE = (ENV['QT_RUBY_SCOPE'] || 'all').freeze
@@ -50,6 +52,7 @@ require_relative 'generate_bridge/auto_method_spec_resolver'
 require_relative 'generate_bridge/cpp_method_return_emitter'
 require_relative 'generate_bridge/ast_introspection'
 require_relative 'generate_bridge/auto_methods'
+require_relative 'generate_bridge/event_payloads'
 require_relative 'generate_bridge/spec_discovery'
 
 def next_trace_base(fetch_bases, cur, visited)
@@ -1135,6 +1138,14 @@ timed('write_ruby_constants') do
   FileUtils.mkdir_p(File.dirname(RUBY_CONSTANTS_PATH))
   File.write(RUBY_CONSTANTS_PATH, generate_ruby_constants(ast))
 end
+timed('write_ruby_event_payloads') do
+  FileUtils.mkdir_p(File.dirname(RUBY_EVENT_PAYLOADS_PATH))
+  File.write(RUBY_EVENT_PAYLOADS_PATH, generate_ruby_event_payloads(ast))
+end
+timed('write_cpp_event_payloads') do
+  FileUtils.mkdir_p(File.dirname(CPP_EVENT_PAYLOADS_PATH))
+  File.write(CPP_EVENT_PAYLOADS_PATH, generate_cpp_event_payload_extractor(ast))
+end
 timed('write_ruby_widgets') do
   FileUtils.mkdir_p(File.dirname(RUBY_WIDGETS_PATH))
   File.write(RUBY_WIDGETS_PATH, generate_ruby_widgets(effective_specs, super_qt_by_qt, wrapper_qt_classes))
@@ -1144,4 +1155,6 @@ debug_log("total=#{format('%.3fs', monotonic_now - total_start)}")
 puts "Generated #{CPP_PATH}"
 puts "Generated #{API_PATH}"
 puts "Generated #{RUBY_CONSTANTS_PATH}"
+puts "Generated #{RUBY_EVENT_PAYLOADS_PATH}"
+puts "Generated #{CPP_EVENT_PAYLOADS_PATH}"
 puts "Generated #{RUBY_WIDGETS_PATH}"

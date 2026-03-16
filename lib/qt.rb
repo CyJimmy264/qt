@@ -8,8 +8,10 @@ GENERATED_DIR = File.join(ROOT, 'build', 'generated')
 GENERATED_WIDGETS = File.join(GENERATED_DIR, 'widgets.rb')
 GENERATED_API = File.join(GENERATED_DIR, 'bridge_api.rb')
 GENERATED_CONSTANTS = File.join(GENERATED_DIR, 'constants.rb')
+GENERATED_EVENT_PAYLOADS = File.join(GENERATED_DIR, 'event_payloads.rb')
 
-unless File.exist?(GENERATED_WIDGETS) && File.exist?(GENERATED_API) && File.exist?(GENERATED_CONSTANTS)
+unless File.exist?(GENERATED_WIDGETS) && File.exist?(GENERATED_API) && File.exist?(GENERATED_CONSTANTS) &&
+       File.exist?(GENERATED_EVENT_PAYLOADS)
   ok = system(RbConfig.ruby, GENERATOR)
   raise 'Failed to generate Qt Ruby bindings. Run: bundle exec rake compile' unless ok
 end
@@ -30,6 +32,7 @@ require_relative 'qt/native'
 require_relative 'qt/event_runtime_dispatch'
 require_relative 'qt/event_runtime_qobject_methods'
 require_relative 'qt/event_runtime'
+require GENERATED_EVENT_PAYLOADS
 require GENERATED_WIDGETS
 require_relative 'qt/shortcut_compat'
 Qt::GeneratedConstantsRuntime.apply_generated_scoped_constants!(Qt)

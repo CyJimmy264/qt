@@ -3,7 +3,7 @@
 #include <QApplication>
 
 namespace QtRubyRuntime {
-using EventCallback = int (*)(void*, int, int, int, int, int);
+using EventCallback = int (*)(void*, int, const char*);
 using SignalCallback = void (*)(void*, int, const char*);
 
 // Creates/owns the singleton QApplication used by the Ruby runtime bridge.

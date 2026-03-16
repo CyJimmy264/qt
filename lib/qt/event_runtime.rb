@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'json'
+
 module Qt
   # Event/signal subscription runtime backed by generated native callbacks.
   module EventRuntime
@@ -87,10 +89,9 @@ module Qt
       return if @event_callback
 
       @event_callback = FFI::Function.new(
-        :int, %i[pointer int int int int int]
-      ) do |object_handle, event_type, *args|
-        a, b, c, d = args
-        payload = build_event_payload(event_type, a, b, c, d)
+        :int, %i[pointer int string]
+      ) do |object_handle, event_type, payload_json|
+        payload = decode_event_payload(event_type, payload_json)
         EventRuntimeDispatch.dispatch_event(@event_handlers, object_handle, event_type, payload)
       end
 
@@ -114,11 +115,15 @@ module Qt
       widget.respond_to?(:handle) ? widget.handle : widget
     end
 
-    def build_event_payload(event_type, a, b, c, d)
-      payload = { type: event_type, a: a, b: b, c: c, d: d }
-      return payload unless event_type == Qt::EventWheel
-
-      payload.merge(pixel_delta_y: a, angle_delta_y: b)
+    def decode_event_payload(event_type, payload_json)
+      payload =
+        if payload_json.nil? || payload_json.empty?
+          {}
+        else
+          JSON.parse(Qt::StringCodec.from_qt_text(payload_json), symbolize_names: true)
+        end
+      payload[:type] ||= event_type
+      payload
     end
 
     def ensure_native_bridge_ready!

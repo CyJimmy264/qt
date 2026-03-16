@@ -137,6 +137,14 @@ class QtEventRuntimeApiTest < Minitest::Test
     assert_equal Qt::EventMouseButtonDblClick, Qt::EventRuntime.event_type_for(:mouse_button_dbl_click)
   end
 
+  def test_generated_event_payload_schema_is_available
+    schema = Qt::GENERATED_EVENT_PAYLOAD_SCHEMAS[:wheel]
+
+    refute_nil schema
+    assert_equal Qt::EventWheel, schema[:event_type]
+    assert_equal 'QWheelEvent', schema[:event_class]
+  end
+
   def test_signal_resolution_requires_valid_signature
     skip 'native bridge is not available' unless Qt::Native.available?
 
@@ -154,22 +162,22 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
   include QtEventRuntimeTestHelpers
 
   def test_event_payload_contract_for_mouse_events
-    assert_payload_forwarding(Qt::EventMouseButtonPress, [12, 34, 1, 3])
-    assert_payload_forwarding(Qt::EventMouseButtonRelease, [8, 9, 1, 0])
-    assert_payload_forwarding(Qt::EventMouseMove, [101, 202, 0, 1])
+    assert_payload_forwarding(Qt::EventMouseButtonPress, { x: 12.0, y: 34.0, button: 1, buttons: 3, a: 12.0, b: 34.0, c: 1, d: 3 })
+    assert_payload_forwarding(Qt::EventMouseButtonRelease, { x: 8.0, y: 9.0, button: 1, buttons: 0, a: 8.0, b: 9.0, c: 1, d: 0 })
+    assert_payload_forwarding(Qt::EventMouseMove, { x: 101.0, y: 202.0, button: 0, buttons: 1, a: 101.0, b: 202.0, c: 0, d: 1 })
   end
 
   def test_event_payload_contract_for_key_events
-    assert_payload_forwarding(Qt::EventKeyPress, [65, 0, 0, 1])
-    assert_payload_forwarding(Qt::EventKeyRelease, [13, 0, 1, 2])
+    assert_payload_forwarding(Qt::EventKeyPress, { key: 65, modifiers: 0, is_auto_repeat: false, count: 1, a: 65, b: 0, c: false, d: 1 })
+    assert_payload_forwarding(Qt::EventKeyRelease, { key: 13, modifiers: 0, is_auto_repeat: true, count: 2, a: 13, b: 0, c: true, d: 2 })
   end
 
   def test_event_payload_contract_for_resize_event
-    assert_payload_forwarding(Qt::EventResize, [640, 360, 320, 180])
+    assert_payload_forwarding(Qt::EventResize, { width: 640, height: 360, old_width: 320, old_height: 180, a: 640, b: 360, c: 320, d: 180 })
   end
 
   def test_event_payload_contract_for_wheel_event
-    captured = assert_payload_forwarding(Qt::EventWheel, [4, 120, 0, 0])
+    captured = assert_payload_forwarding(Qt::EventWheel, { angle_delta_x: 0, angle_delta_y: 120, pixel_delta_x: 0, pixel_delta_y: 4, buttons: 0, a: 4, b: 120, c: 0, d: 0 })
     assert_equal 4, captured[:pixel_delta_y]
     assert_equal 120, captured[:angle_delta_y]
   end
@@ -400,7 +408,7 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
   end
 
   def find_resize_payload(payloads, width, height)
-    payloads.find { |payload| payload[:type] == Qt::EventResize && payload[:a] == width && payload[:b] == height }
+    payloads.find { |payload| payload[:type] == Qt::EventResize && payload[:width] == width && payload[:height] == height }
   end
 
   def verify_clicked_signal_delivered(calls)
@@ -437,7 +445,7 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
     QApplication.process_events
   end
 
-  def assert_payload_forwarding(event_type, values)
+  def assert_payload_forwarding(event_type, payload)
     ptr = FFI::Pointer.new(0x1234)
     captured = []
 
@@ -446,14 +454,13 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
     Qt::EventRuntime.ensure_event_callback!
     callback = Qt::EventRuntime.instance_variable_get(:@event_callback)
 
-    callback.call(ptr, event_type, *values)
+    callback.call(ptr, event_type, JSON.generate(payload.merge(type: event_type)))
 
     assert_equal 1, captured.length
     assert_equal event_type, captured.first[:type]
-    assert_equal values[0], captured.first[:a]
-    assert_equal values[1], captured.first[:b]
-    assert_equal values[2], captured.first[:c]
-    assert_equal values[3], captured.first[:d]
+    payload.each do |key, value|
+      assert_equal value, captured.first[key]
+    end
     captured.first
   end
 end
