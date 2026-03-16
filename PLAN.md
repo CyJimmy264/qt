@@ -4,6 +4,12 @@
 
 Move the bridge toward maximal Qt-derived generation with minimal policy surface, so Qt 6.x updates are pulled in automatically instead of requiring manual generator maintenance.
 
+## Maintenance
+
+- Keep this file current.
+- Remove completed items instead of accumulating stale history in the active plan.
+- When a task is only partially done, rewrite it to reflect the remaining work precisely.
+
 ## Event Payload Roadmap
 
 ### Current Direction
@@ -14,13 +20,16 @@ Move the bridge toward maximal Qt-derived generation with minimal policy surface
 
 ### Near-Term Follow-Ups
 
-1. Remove duplicate warnings during event payload generation.
-2. Continue pushing remaining policy out of `scripts/generate_bridge/event_payloads.rb`:
+1. Continue pushing remaining policy out of `scripts/generate_bridge/event_payloads.rb`:
    - `EVENT_PAYLOAD_EXCLUDED_METHODS`
    - `EVENT_PAYLOAD_COMPATIBILITY_ALIASES`
    - flattening heuristics for `QPoint` / `QSize` / similar Qt value types
-3. Build a more direct `QEvent::Type -> event class` extractor from AST/header patterns to reduce family heuristics further.
-4. Continue extending typed support across the bridge using the same approach, not only for events.
+2. Build a more direct `QEvent::Type -> event class` extractor from AST/header patterns to reduce family heuristics further.
+3. Continue extending typed support across the bridge using the same approach, not only for events.
+4. Distinguish `ignore` vs `consume` in event runtime callback results:
+   - support `:consume` and `true` from Ruby `on(:...)` handlers
+   - make native `eventFilter(...)` return `true` for consumed events instead of only calling `event->ignore()`
+   - keep `false` / `:ignore` mapped to `event->ignore()` for pass-through behavior
 
 ## Phase 2
 
