@@ -598,14 +598,18 @@ def ruby_api_metadata(methods)
   ruby_method_names = methods.flat_map do |method|
     ruby_name = ruby_safe_method_name(method[:ruby_name])
     snake = to_snake(ruby_name)
-    snake == ruby_name ? [ruby_name] : [ruby_name, snake]
+    names = snake == ruby_name ? [ruby_name] : [ruby_name, snake]
+    names.concat(setter_alias_method_names(method))
+    names
   end.uniq
   properties = methods.filter_map { |method| method[:property] }.uniq
 
   {
     qt_method_names: qt_method_names,
     ruby_method_names: ruby_method_names,
-    properties: properties
+    properties: properties,
+    setter_aliases: {},
+    singleton_setter_aliases: {}
   }
 end
 
@@ -614,6 +618,8 @@ def append_ruby_class_api_constants(lines, qt_class:, metadata:, indent:)
   lines << "#{indent}QT_API_QT_METHODS = #{metadata[:qt_method_names].inspect}.freeze"
   lines << "#{indent}QT_API_RUBY_METHODS = #{metadata[:ruby_method_names].map(&:to_sym).inspect}.freeze"
   lines << "#{indent}QT_API_PROPERTIES = #{metadata[:properties].map(&:to_sym).inspect}.freeze"
+  lines << "#{indent}QT_API_SETTER_ALIASES = #{metadata[:setter_aliases].inspect}.freeze"
+  lines << "#{indent}QT_API_SINGLETON_SETTER_ALIASES = #{metadata[:singleton_setter_aliases].inspect}.freeze"
 end
 
 def ruby_method_arguments(method, arg_map, required_arg_count)
@@ -705,6 +711,29 @@ def append_ruby_property_writer(lines, method:, indent:)
   lines << "#{indent}alias_method :#{snake_property}=, :#{method[:property]}=" if snake_property != method[:property]
 end
 
+def setter_alias_base_name(method)
+  return nil unless method[:args].length == 1
+  return nil if method[:property]
+
+  property_name_from_setter(method[:qt_name] || method[:ruby_name].to_s)
+end
+
+def setter_alias_method_names(method)
+  setter_alias_specs(method).keys
+end
+
+def setter_alias_specs(method)
+  base_name = setter_alias_base_name(method)
+  return {} unless base_name
+
+  ruby_target = ruby_public_method_name(base_name)
+  snake_target = to_snake(ruby_target)
+  setter_method_name = ruby_safe_method_name(method[:ruby_name])
+  aliases = { "#{ruby_target}=" => setter_method_name }
+  aliases["#{snake_target}="] = setter_method_name if snake_target != ruby_target
+  aliases
+end
+
 def append_widget_initializer(lines, spec:, widget_root:, indent:)
   if spec[:constructor][:mode] == :string_path
     append_string_path_initializer(lines, spec, indent)
@@ -778,6 +807,9 @@ end
 
 def generate_ruby_qapplication(lines, spec)
   metadata = ruby_api_metadata(spec[:methods])
+  metadata[:singleton_setter_aliases] = Array(spec[:class_methods]).each_with_object({}) do |method, aliases|
+    aliases.merge!(setter_alias_specs(method))
+  end
 
   append_ruby_qapplication_prelude(lines, spec, metadata)
   append_ruby_qapplication_singleton_accessors(lines)
@@ -889,7 +921,11 @@ end
 def ruby_api_metadata_for_spec(spec, specs_by_qt, super_qt_by_qt)
   inherited_methods = inherited_methods_for_spec(spec, specs_by_qt, super_qt_by_qt)
   all_methods = (inherited_methods + spec[:methods]).uniq { |method| method[:qt_name] }
-  ruby_api_metadata(all_methods)
+  metadata = ruby_api_metadata(all_methods)
+  metadata[:setter_aliases] = all_methods.each_with_object({}) do |method, aliases|
+    aliases.merge!(setter_alias_specs(method))
+  end
+  metadata
 end
 
 def ruby_super_class_for_spec(spec, super_qt_by_qt, qt_to_ruby)

@@ -70,6 +70,18 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
+  def test_qapplication_class_setter_aliases_roundtrip
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      QApplication.application_name = 'Alias App'
+      QApplication.desktop_file_name = 'alias-app'
+
+      assert_equal 'Alias App', QApplication.application_name
+      assert_equal 'alias-app', QApplication.desktop_file_name
+    end
+  end
+
   def test_qapplication_dispose_is_idempotent
     skip 'native bridge is not available' unless Qt::Native.available?
 
@@ -160,6 +172,22 @@ class QtBindingsTest < Minitest::Test
       assert_equal 1, window.children.size
       assert_equal label, window.children.first
       assert_equal 'A', label.text
+    end
+  end
+
+  def test_single_argument_setters_get_ruby_writer_aliases
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      window = QWidget.new
+
+      window.enabled = false
+      window.hidden = true
+
+      refute window.is_enabled
+      assert window.is_hidden
+      assert_includes QWidget::QT_API_RUBY_METHODS, :enabled=
+      assert_includes QWidget::QT_API_RUBY_METHODS, :hidden=
     end
   end
 

@@ -29,11 +29,13 @@ require_relative 'qt/object_wrapper'
 require_relative 'qt/application_lifecycle'
 require_relative 'qt/bridge'
 require_relative 'qt/native'
+require_relative 'qt/generated_setter_aliases_runtime'
 require_relative 'qt/event_runtime_dispatch'
 require_relative 'qt/event_runtime_qobject_methods'
 require_relative 'qt/event_runtime'
 require GENERATED_EVENT_PAYLOADS
 require GENERATED_WIDGETS
+Qt::GeneratedSetterAliasesRuntime.apply!(Qt)
 Qt::ObjectWrapper.install_constructor_cache_hooks!
 require_relative 'qt/shortcut_compat'
 Qt::GeneratedConstantsRuntime.apply_generated_scoped_constants!(Qt)

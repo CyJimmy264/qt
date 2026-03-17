@@ -31,10 +31,6 @@ Move the bridge toward maximal Qt-derived generation with minimal policy surface
    - audit `QApplication` / `QCoreApplication` style static methods such as `process_events`
    - decide whether Ruby should expose ergonomic instance aliases for them
    - then implement that policy consistently instead of having mixed class-only and instance-only behavior
-5. Make setter alias generation more consistent:
-   - audit `set_*` / `setXxx(...)` methods with a single meaningful value argument
-   - extend Ruby alias generation beyond the current property-only cases where it is safe and justified
-   - prefer systematic generator policy over hand-picked per-class setter aliases
 
 ## Phase 2
 
