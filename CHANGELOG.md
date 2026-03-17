@@ -13,6 +13,7 @@ The format is based on Keep a Changelog.
 - Return `QObject::children()` from Qt-derived bridge data instead of maintaining a separate Ruby-side `children` mirror, and decode `QObjectList` results into canonical wrapped Ruby objects.
 - Add systematic Ruby writer aliases for single-argument Qt setters such as `enabled=` and `application_name=` via generated metadata plus a shared runtime alias layer, instead of limiting `...=` support to property-only paths.
 - Forward generated `QApplication` singleton APIs such as `process_events`, `keyboard_modifiers`, and singleton setter aliases through instance methods so the Ruby surface is consistent between `QApplication.process_events` and `app.process_events`.
+- Normalize invalid or namespaced expected Qt class names in the central object-wrapping path so `QObjectList`-derived APIs such as `children()` do not raise `wrong constant name` when complex widget trees produce non-canonical class hints.
 
 ## [0.1.6] - 2026-03-16
 

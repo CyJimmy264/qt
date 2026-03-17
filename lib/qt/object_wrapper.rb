@@ -36,9 +36,10 @@ module Qt
     end
 
     def candidate_wrapper_classes(expected_qt_class)
+      normalized_qt_class = normalize_expected_qt_class(expected_qt_class)
       @candidate_wrapper_classes ||= {}
-      @candidate_wrapper_classes[expected_qt_class] ||= begin
-        base = fallback_wrapper_class(expected_qt_class)
+      @candidate_wrapper_classes[normalized_qt_class] ||= begin
+        base = fallback_wrapper_class(normalized_qt_class)
         wrappers = qobject_wrapper_classes
         wrappers = wrappers.select { |klass| klass <= base } if base
         wrappers.sort_by { |klass| -inheritance_depth(klass) }
@@ -57,14 +58,18 @@ module Qt
     end
 
     def fallback_wrapper_class(expected_qt_class)
-      return nil if expected_qt_class.nil? || !Qt.const_defined?(expected_qt_class, false)
+      normalized_qt_class = normalize_expected_qt_class(expected_qt_class)
+      return nil unless normalized_qt_class
+      return nil unless Qt.const_defined?(normalized_qt_class, false)
 
-      klass = Qt.const_get(expected_qt_class, false)
+      klass = Qt.const_get(normalized_qt_class, false)
       return nil unless klass.is_a?(Class)
       return nil unless klass.const_defined?(:QT_CLASS, false)
       return nil unless klass <= Qt::QObject
 
       klass
+    rescue NameError
+      nil
     end
 
     def instantiate_wrapper(klass, pointer)
@@ -150,6 +155,18 @@ module Qt
         current = current.superclass
       end
       depth
+    end
+
+    def normalize_expected_qt_class(expected_qt_class)
+      return nil if expected_qt_class.nil?
+
+      value = expected_qt_class.to_s.strip
+      return nil if value.empty?
+
+      value = value.delete_prefix('Qt::')
+      return nil unless value.match?(/\A[A-Z]\w*\z/)
+
+      value
     end
   end
 end

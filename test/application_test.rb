@@ -349,6 +349,19 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
+  def test_object_wrapper_ignores_blank_or_invalid_expected_qt_class_names
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      window = QWidget.new
+
+      assert_kind_of QWidget, Qt::ObjectWrapper.wrap(window.handle, '')
+      assert_kind_of QWidget, Qt::ObjectWrapper.wrap(window.handle, 'Qt::QWidget')
+      assert_kind_of QWidget, Qt::ObjectWrapper.wrap(window.handle, '::')
+      assert_kind_of QWidget, Qt::ObjectWrapper.wrap(window.handle, 'foo-bar')
+    end
+  end
+
   def test_qapplication_focus_widget_returns_wrapped_widget
     skip 'native bridge is not available' unless Qt::Native.available?
     skip 'QApplication.focus_widget is not available in this generated scope' unless QApplication.respond_to?(:focus_widget)
