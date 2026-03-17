@@ -82,6 +82,20 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
+  def test_qapplication_instance_forwards_singleton_runtime_methods
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do |app|
+      app.process_events
+      app.application_name = 'Forwarded App'
+
+      assert_kind_of Integer, app.keyboard_modifiers
+      assert_equal 'Forwarded App', app.application_name
+      assert_respond_to app, :process_events
+      assert_respond_to app, :application_name=
+    end
+  end
+
   def test_qapplication_dispose_is_idempotent
     skip 'native bridge is not available' unless Qt::Native.available?
 

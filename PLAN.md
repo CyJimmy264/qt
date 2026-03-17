@@ -27,10 +27,6 @@ Move the bridge toward maximal Qt-derived generation with minimal policy surface
    - flattening heuristics for `QPoint` / `QSize` / similar Qt value types
 2. Build a more direct `QEvent::Type -> event class` extractor from AST/header patterns to reduce family heuristics further.
 3. Continue extending typed support across the bridge using the same approach, not only for events.
-4. Make static-Qt API exposure consistent in Ruby:
-   - audit `QApplication` / `QCoreApplication` style static methods such as `process_events`
-   - decide whether Ruby should expose ergonomic instance aliases for them
-   - then implement that policy consistently instead of having mixed class-only and instance-only behavior
 
 ## Phase 2
 

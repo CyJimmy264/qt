@@ -609,7 +609,8 @@ def ruby_api_metadata(methods)
     ruby_method_names: ruby_method_names,
     properties: properties,
     setter_aliases: {},
-    singleton_setter_aliases: {}
+    singleton_setter_aliases: {},
+    singleton_forwarders: []
   }
 end
 
@@ -620,6 +621,7 @@ def append_ruby_class_api_constants(lines, qt_class:, metadata:, indent:)
   lines << "#{indent}QT_API_PROPERTIES = #{metadata[:properties].map(&:to_sym).inspect}.freeze"
   lines << "#{indent}QT_API_SETTER_ALIASES = #{metadata[:setter_aliases].inspect}.freeze"
   lines << "#{indent}QT_API_SINGLETON_SETTER_ALIASES = #{metadata[:singleton_setter_aliases].inspect}.freeze"
+  lines << "#{indent}QT_API_SINGLETON_FORWARDERS = #{metadata[:singleton_forwarders].inspect}.freeze"
 end
 
 def ruby_method_arguments(method, arg_map, required_arg_count)
@@ -734,6 +736,16 @@ def setter_alias_specs(method)
   aliases
 end
 
+def qapplication_singleton_forwarder_names(methods, singleton_setter_aliases)
+  method_names = methods.flat_map do |method|
+    ruby_name = ruby_safe_method_name(method[:ruby_name])
+    snake_alias = to_snake(ruby_name)
+    snake_alias == ruby_name ? [ruby_name] : [ruby_name, snake_alias]
+  end
+
+  (method_names + singleton_setter_aliases.keys).uniq
+end
+
 def append_widget_initializer(lines, spec:, widget_root:, indent:)
   if spec[:constructor][:mode] == :string_path
     append_string_path_initializer(lines, spec, indent)
@@ -810,6 +822,10 @@ def generate_ruby_qapplication(lines, spec)
   metadata[:singleton_setter_aliases] = Array(spec[:class_methods]).each_with_object({}) do |method, aliases|
     aliases.merge!(setter_alias_specs(method))
   end
+  metadata[:singleton_forwarders] = qapplication_singleton_forwarder_names(
+    Array(spec[:class_methods]),
+    metadata[:singleton_setter_aliases]
+  )
 
   append_ruby_qapplication_prelude(lines, spec, metadata)
   append_ruby_qapplication_singleton_accessors(lines)

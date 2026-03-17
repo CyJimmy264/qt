@@ -12,6 +12,7 @@ The format is based on Keep a Changelog.
 - Share native signal registrations between internal bridge hooks and user callbacks so internal lifecycle hooks do not duplicate user signal delivery.
 - Return `QObject::children()` from Qt-derived bridge data instead of maintaining a separate Ruby-side `children` mirror, and decode `QObjectList` results into canonical wrapped Ruby objects.
 - Add systematic Ruby writer aliases for single-argument Qt setters such as `enabled=` and `application_name=` via generated metadata plus a shared runtime alias layer, instead of limiting `...=` support to property-only paths.
+- Forward generated `QApplication` singleton APIs such as `process_events`, `keyboard_modifiers`, and singleton setter aliases through instance methods so the Ruby surface is consistent between `QApplication.process_events` and `app.process_events`.
 
 ## [0.1.6] - 2026-03-16
 
