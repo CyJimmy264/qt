@@ -1,5 +1,5 @@
 Name:           ruby-qt
-Version:        0.1.6
+Version:        0.1.7
 Release:        1%{?dist}
 Summary:        Ruby bindings for Qt 6 with generated native bridge
 
@@ -107,6 +107,14 @@ find %{buildroot} -type f -name qt_ruby_bridge.so -exec /usr/bin/chrpath -d {} \
 %{gem_dir}/extensions
 
 %changelog
+* Tue Mar 17 2026 Maksim Veynberg <mv@cj264.ru> - 0.1.7-1
+- Keep canonical Ruby wrapper identity for QObject-derived handles
+- Share native signal registrations between internal bridge hooks and user callbacks
+- Derive QObject children from Qt QObjectList results instead of a Ruby-side mirror
+- Add systematic Ruby writer aliases from generated metadata
+- Forward generated QApplication singleton APIs through instance methods
+- Sanitize expected Qt class names in object wrapping to avoid wrong constant name failures
+
 * Mon Mar 16 2026 Maksim Veynberg <mv@cj264.ru> - 0.1.6-1
 - Generate event payload schemas and switch event runtime callbacks to JSON payload delivery
 - Expand generated event payload coverage for additional event families

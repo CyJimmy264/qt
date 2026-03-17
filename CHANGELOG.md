@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-03-17
+
 ### Changed
 
 - Keep canonical Ruby wrapper identity for `QObject`-derived native handles by caching wrappers per native object, reusing them across wrapping paths such as `parent`, `child_at`, and `focus_widget`, and invalidating the cache on `QObject::destroyed`.
