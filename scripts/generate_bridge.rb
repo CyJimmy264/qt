@@ -385,8 +385,10 @@ def generate_cpp_bridge(specs, free_function_specs)
 end
 
 def append_cpp_spec_methods(lines, spec)
-  generate_cpp_constructor(lines, spec)
-  lines << ''
+  unless spec[:constructor][:mode] == :wrap_only
+    generate_cpp_constructor(lines, spec)
+    lines << ''
+  end
   spec[:methods].each do |method|
     generate_cpp_method(lines, spec, method)
     lines << ''
@@ -747,7 +749,10 @@ def qapplication_singleton_forwarder_names(methods, singleton_setter_aliases)
 end
 
 def append_widget_initializer(lines, spec:, widget_root:, indent:)
-  if spec[:constructor][:mode] == :string_path
+  if spec[:constructor][:mode] == :wrap_only
+    append_wrap_only_initializer(lines, spec, indent)
+    return
+  elsif spec[:constructor][:mode] == :string_path
     append_string_path_initializer(lines, spec, indent)
   elsif spec[:constructor][:mode] == :keysequence_parent
     append_keysequence_parent_initializer(lines, spec, widget_root, indent)
@@ -758,6 +763,12 @@ def append_widget_initializer(lines, spec:, widget_root:, indent:)
   end
 
   lines << "#{indent}  yield self if block_given?"
+  lines << "#{indent}end"
+end
+
+def append_wrap_only_initializer(lines, spec, indent)
+  lines << "#{indent}def initialize(*)"
+  lines << "#{indent}  raise NotImplementedError, '#{spec[:ruby_class]} cannot be directly instantiated yet'"
   lines << "#{indent}end"
 end
 

@@ -160,7 +160,7 @@ def related_value_class_candidate?(ast, qt_class, all_classes, template_classes)
   return false if abstract_class?(ast, qt_class)
   return false if class_inherits?(ast, qt_class, 'QObject')
 
-  constructor_usable_for_codegen?(ast, qt_class)
+  true
 end
 
 def related_qt_type_names(ast, qt_class)
@@ -178,11 +178,12 @@ end
 
 def append_related_qt_types_from_decl(out, parsed, method_name)
   candidates = []
-  candidates << normalized_cpp_type_name(parsed[:return_type]).to_s if parsed[:return_type]
-  parsed[:params].each { |param| candidates << normalized_cpp_type_name(param[:type]).to_s }
-  candidates.each do |candidate|
+  candidates << [related_qt_type_name(parsed[:return_type]), parsed[:return_type].to_s] if parsed[:return_type]
+  parsed[:params].each { |param| candidates << [related_qt_type_name(param[:type]), param[:type].to_s] }
+  candidates.each do |candidate, raw_type|
     next if candidate.empty? || !candidate.start_with?('Q')
-    next unless related_type_name_matches_method?(candidate, method_name)
+    next unless related_type_name_matches_method?(candidate, method_name) ||
+                (qt_pointer_type?(raw_type) && candidate.end_with?('Item'))
 
     out << candidate
   end
@@ -193,6 +194,14 @@ def related_type_name_matches_method?(qt_type, method_name)
   return false if token.empty?
 
   method_name.to_s.downcase.include?(token)
+end
+
+def qt_pointer_type?(raw_type)
+  raw_type.to_s.strip.end_with?('*')
+end
+
+def related_qt_type_name(raw_type)
+  normalized_cpp_type_name(raw_type).to_s.delete_suffix('*')
 end
 
 def discover_target_qt_classes(ast, scope)
@@ -220,7 +229,22 @@ def widget_target_qt_class?(ast, qt_class)
 
   class_inherits?(ast, qt_class, 'QWidget') ||
     class_inherits?(ast, qt_class, 'QLayout') ||
+    widget_item_target_qt_class?(ast, qt_class) ||
     qt_class == 'QTableWidgetItem'
+end
+
+def widget_item_target_qt_class?(ast, qt_class)
+  return false unless qt_class.end_with?('Item')
+  return false if class_inherits?(ast, qt_class, 'QObject')
+
+  collect_constructor_decls(ast, qt_class).any? do |decl|
+    parsed = parse_method_signature(decl)
+    next false unless parsed
+
+    parsed[:params].any? do |param|
+      normalized_cpp_type_name(param[:type]).to_s.match?(/\AQ\w*Widget\*\z/)
+    end
+  end
 end
 
 def qobject_target_qt_class?(ast, qt_class)
@@ -264,8 +288,10 @@ def build_base_spec_for_qt_class(ast, qt_class)
       parent_constructor_for_type(parent_type, widget_child)
     elsif string_path_cast
       string_path_constructor(string_path_cast)
-    else
+    elsif ctor_decls.any? { |decl| constructor_supports_no_args?(decl) }
       { parent: false }
+    else
+      { parent: false, mode: :wrap_only }
     end
   base_spec_hash(qt_class, parent_ctor)
 end

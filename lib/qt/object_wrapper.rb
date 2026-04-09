@@ -65,7 +65,6 @@ module Qt
       klass = Qt.const_get(normalized_qt_class, false)
       return nil unless klass.is_a?(Class)
       return nil unless klass.const_defined?(:QT_CLASS, false)
-      return nil unless klass <= Qt::QObject
 
       klass
     rescue NameError
@@ -87,6 +86,7 @@ module Qt
 
       pointer = wrapper.handle
       return wrapper if null_pointer?(pointer)
+      return wrapper unless qobject_wrapper?(wrapper.class)
 
       cached = cached_wrapper_for(pointer)
       return cached if cached
@@ -155,6 +155,10 @@ module Qt
         current = current.superclass
       end
       depth
+    end
+
+    def qobject_wrapper?(klass)
+      klass.is_a?(Class) && klass <= Qt::QObject
     end
 
     def normalize_expected_qt_class(expected_qt_class)

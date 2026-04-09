@@ -95,7 +95,7 @@ def map_pointer_cpp_return_type(type, ast: nil)
 
   info = { ffi_return: :pointer }
   base_type = type.sub(/\s*\*\z/, '').strip
-  if ast && class_inherits?(ast, base_type, 'QObject')
+  if ast && ast_class_index(ast)[:methods_by_class].key?(base_type)
     info[:pointer_class] = base_type
   end
 

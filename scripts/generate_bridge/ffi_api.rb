@@ -19,6 +19,8 @@ def all_ffi_functions(specs, free_function_specs:)
 end
 
 def append_constructor_ffi_function(fns, spec)
+  return if spec[:constructor][:mode] == :wrap_only
+
   ctor_args = constructor_ffi_args(spec)
   fns << { name: ctor_function_name(spec), ffi_return: :pointer, args: ctor_args }
 end

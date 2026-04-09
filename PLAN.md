@@ -27,6 +27,10 @@ Move the bridge toward maximal Qt-derived generation with minimal policy surface
    - flattening heuristics for `QPoint` / `QSize` / similar Qt value types
 2. Build a more direct `QEvent::Type -> event class` extractor from AST/header patterns to reduce family heuristics further.
 3. Continue extending typed support across the bridge using the same approach, not only for events.
+4. Continue extending typed support for non-`QObject` Qt object/item classes beyond the first `QListWidgetItem` case:
+   - generate Ruby wrappers/codecs for additional Qt-owned item/value types that are not `QObject`/`QWidget`
+   - make collection/item APIs return and accept real Ruby wrapper objects instead of leaving them as opaque pointers
+   - keep `QObject`-specific wrapper caching and lifecycle hooks out of these non-`QObject` wrappers unless Qt ownership semantics actually require them
 
 ## Phase 2
 

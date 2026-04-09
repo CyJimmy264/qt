@@ -223,6 +223,28 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
+  def test_qlist_widget_item_is_wrapped_as_non_qobject_qt_class
+    skip 'native bridge is not available' unless Qt::Native.available?
+    skip 'QListWidgetItem is not available in this generated scope' unless Qt.const_defined?(:QListWidgetItem, false)
+
+    with_qapplication do
+      list = QListWidget.new
+      list.add_item('Alpha')
+
+      item = list.item(0)
+      assert_kind_of QListWidgetItem, item
+      assert_equal 'Alpha', item.text
+
+      item.text = 'Beta'
+      list.current_item = item
+
+      assert_equal 'Beta', list.current_item.text
+
+      standalone = QListWidgetItem.new('Standalone')
+      assert_equal 'Standalone', standalone.text
+    end
+  end
+
   def test_qwidget_focus_widget_returns_wrapped_widget
     skip 'native bridge is not available' unless Qt::Native.available?
 
