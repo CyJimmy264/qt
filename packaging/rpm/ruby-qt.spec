@@ -1,5 +1,5 @@
 Name:           ruby-qt
-Version:        0.1.7
+Version:        0.1.8
 Release:        1%{?dist}
 Summary:        Ruby bindings for Qt 6 with generated native bridge
 
@@ -107,6 +107,9 @@ find %{buildroot} -type f -name qt_ruby_bridge.so -exec /usr/bin/chrpath -d {} \
 %{gem_dir}/extensions
 
 %changelog
+* Tue Mar 17 2026 Maksim Veynberg <mv@cj264.ru> - 0.1.8-1
+- Export QCursor shape constants and add cursor= support for widget APIs
+
 * Tue Mar 17 2026 Maksim Veynberg <mv@cj264.ru> - 0.1.7-1
 - Keep canonical Ruby wrapper identity for QObject-derived handles
 - Share native signal registrations between internal bridge hooks and user callbacks

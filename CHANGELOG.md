@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-05-05
+
 ### Added
 
 - Add initial typed support for non-`QObject` Qt item wrappers by generating and wrapping `QListWidgetItem`, including `QListWidget` item-returning APIs such as `item`, `current_item`, and `take_item`.
