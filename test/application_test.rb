@@ -245,6 +245,22 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
+  def test_qcursor_shape_constants_are_exported
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    assert Qt.const_defined?(:PointingHandCursor, false)
+    assert Qt.const_defined?(:BitmapCursor, false)
+
+    with_qapplication do
+      button = QPushButton.new
+      button.setText('Cursor')
+      assert_respond_to button, :cursor=
+      assert_respond_to button, :setCursor
+      button.cursor = Qt::PointingHandCursor
+      button.setCursor(Qt::ArrowCursor)
+    end
+  end
+
   def test_qwidget_focus_widget_returns_wrapped_widget
     skip 'native bridge is not available' unless Qt::Native.available?
 

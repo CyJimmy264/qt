@@ -52,6 +52,7 @@ def map_cpp_arg_type(type_name, qt_class: nil, int_cast_types: nil)
   return { ffi: :string, cast: :qdate_from_utf8 } if type == 'QDate'
   return { ffi: :string, cast: :qtime_from_utf8 } if type == 'QTime'
   return { ffi: :string, cast: :qkeysequence_from_utf8 } if type == 'QKeySequence'
+  return { ffi: :int, cast: :qcursor_shape } if type == 'QCursor'
   return { ffi: :pointer, cast: :qicon_ref } if type == 'QIcon'
   return { ffi: :string, cast: :qany_string_view } if type == 'QAnyStringView'
   return { ffi: :string, cast: :qvariant_from_utf8 } if type == 'QVariant'

@@ -246,6 +246,7 @@ def arg_expr(arg)
   when :qdate_from_utf8 then "qdate_from_bridge_value(#{arg[:name]})"
   when :qtime_from_utf8 then "qtime_from_bridge_value(#{arg[:name]})"
   when :qkeysequence_from_utf8 then "QKeySequence(as_qstring(#{arg[:name]}))"
+  when :qcursor_shape then "QCursor(static_cast<Qt::CursorShape>(#{arg[:name]}))"
   when :qicon_ref then "*static_cast<QIcon*>(#{arg[:name]})"
   when :qany_string_view then "QAnyStringView(as_qstring(#{arg[:name]}))"
   when :qvariant_from_utf8 then "qvariant_from_bridge_value(#{arg[:name]})"
@@ -719,6 +720,8 @@ def setter_alias_base_name(method)
   return nil unless method[:args].length == 1
   return nil if method[:property]
 
+  return 'cursor' if method[:qt_name] == 'setCursor'
+
   property_name_from_setter(method[:qt_name] || method[:ruby_name].to_s)
 end
 
@@ -1060,6 +1063,7 @@ def collect_enum_constants_for_scope(ast, target_scope, warnings = [])
     next unless node['kind'] == 'EnumDecl'
     next unless scope == target_scope
 
+    next_value = 0
     Array(node['inner']).each do |entry|
       next unless entry['kind'] == 'EnumConstantDecl'
 
@@ -1069,9 +1073,14 @@ def collect_enum_constants_for_scope(ast, target_scope, warnings = [])
 
       raw_value = ast_extract_first_value(entry)
       value = parse_ast_integer_value(raw_value)
-      next if value.nil?
+      if value.nil?
+        value = next_value
+      else
+        next_value = value
+      end
 
       append_constant_with_conflict_warning(constants, name, value, warnings, target_scope.join('::'))
+      next_value = value + 1
     end
   end
 
@@ -1085,6 +1094,9 @@ def collect_qt_namespace_enum_constants(ast, warnings = [])
     next unless alias_name.match?(/\A[A-Z][A-Za-z0-9_]*\z/)
 
     append_constant_with_conflict_warning(constants, alias_name, value, warnings, 'Qt::QEventAlias')
+  end
+  collect_enum_constants_for_scope(ast, ['QCursor'], warnings).each do |name, value|
+    append_constant_with_conflict_warning(constants, name, value, warnings, 'Qt::QCursorAlias')
   end
   constants
 end

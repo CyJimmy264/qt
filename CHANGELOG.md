@@ -9,6 +9,7 @@ The format is based on Keep a Changelog.
 ### Added
 
 - Add initial typed support for non-`QObject` Qt item wrappers by generating and wrapping `QListWidgetItem`, including `QListWidget` item-returning APIs such as `item`, `current_item`, and `take_item`.
+- Export `QCursor` shape constants such as `PointingHandCursor` into the `Qt` namespace and add a supported `cursor=` alias for widgets so cursor APIs can use symbolic shapes instead of raw numeric ids.
 
 ### Changed
 
