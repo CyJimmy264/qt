@@ -6,6 +6,19 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-06-04
+
+### Added
+
+- Generate `QHeaderView` wrappers for table/tree header objects returned by Qt APIs, including section movement methods such as `set_sections_movable`, `visual_index`, `logical_index`, and `move_section`.
+- Add `QT_RUBY_OBJECT_WRAPPER_DEBUG=1` diagnostics for object-wrapper fallback paths that still return raw native pointers.
+- Add a generator-output invariant test that fails when generated native `extern "C"` bridge symbols collide.
+
+### Changed
+
+- Avoid running the bridge generator twice during `bundle exec rake compile` when `Rakefile` has already prepared generated inputs for `extconf.rb`.
+- Make generated native bridge function names collision-safe while preserving the public Ruby method surface.
+
 ## [0.1.8] - 2026-05-05
 
 ### Added

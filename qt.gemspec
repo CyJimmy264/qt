@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |spec|
   spec.name          = 'qt'
-  spec.version       = '0.1.8'
+  spec.version       = '0.1.9'
   spec.authors       = ['Maksim Veynberg']
   spec.email         = ['mv@cj264.ru']
 
