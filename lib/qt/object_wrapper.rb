@@ -20,7 +20,10 @@ module Qt
       return cached if cached
 
       klass = resolve_wrapper_class(pointer, expected_qt_class) || fallback_wrapper_class(expected_qt_class)
-      return pointer unless klass
+      unless klass
+        warn_unwrapped_pointer(pointer, expected_qt_class)
+        return pointer
+      end
 
       register_wrapper(instantiate_wrapper(klass, pointer))
     end
@@ -113,6 +116,7 @@ module Qt
     def reset_cache!
       @wrapper_cache = {}
       @destroy_hook_addresses = {}
+      @unwrapped_pointer_warning_keys = {}
     end
 
     def install_constructor_cache_hooks!
@@ -130,6 +134,33 @@ module Qt
 
     def destroy_hook_addresses
       @destroy_hook_addresses ||= {}
+    end
+
+    def object_wrapper_debug_enabled?
+      ENV['QT_RUBY_OBJECT_WRAPPER_DEBUG'] == '1'
+    end
+
+    def warn_unwrapped_pointer(pointer, expected_qt_class)
+      return unless object_wrapper_debug_enabled?
+
+      label = warning_qt_class_label(expected_qt_class)
+      return if unwrapped_pointer_warning_keys[label]
+
+      unwrapped_pointer_warning_keys[label] = true
+      warn "[qt-ruby-wrapper] returning raw pointer for #{label}; no generated wrapper class matched " \
+           "address=0x#{pointer.address.to_s(16)}"
+    end
+
+    def warning_qt_class_label(expected_qt_class)
+      normalized = normalize_expected_qt_class(expected_qt_class)
+      return normalized if normalized
+
+      raw = expected_qt_class.to_s.strip
+      raw.empty? ? '(unknown Qt class)' : raw
+    end
+
+    def unwrapped_pointer_warning_keys
+      @unwrapped_pointer_warning_keys ||= {}
     end
 
     def ensure_destroy_hook(wrapper, pointer)

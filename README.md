@@ -301,6 +301,12 @@ Native event-runtime debug logs:
 QT_RUBY_EVENT_DEBUG=1 ruby your_app.rb
 ```
 
+Object-wrapper fallback debug logs:
+
+```bash
+QT_RUBY_OBJECT_WRAPPER_DEBUG=1 ruby your_app.rb
+```
+
 Optional tuning:
 
 ```bash
