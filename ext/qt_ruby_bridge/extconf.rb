@@ -6,6 +6,11 @@ require 'fileutils'
 PKG_CONFIG = RbConfig::CONFIG['PKG_CONFIG'] || 'pkg-config'
 QT_PACKAGES = %w[Qt6Core Qt6Gui Qt6Widgets].freeze
 MINIMUM_QT_VERSION = Gem::Version.new('6.4.2')
+ROOT = File.expand_path('../..', __dir__)
+GENERATOR = File.join(ROOT, 'scripts/generate_bridge.rb')
+GENERATED_CPP = File.join(ROOT, 'build/generated/qt_ruby_bridge.cpp')
+GENERATED_EVENT_PAYLOADS = File.join(ROOT, 'build/generated/event_payloads.inc')
+LOCAL_CPP = File.expand_path('qt_ruby_bridge.cpp')
 
 def pkg_config(*)
   system(PKG_CONFIG, *, out: File::NULL, err: File::NULL)
@@ -15,15 +20,27 @@ def pkg_config_capture(*args)
   `#{[PKG_CONFIG, *args].join(' ')}`.strip
 end
 
+def generated_bridge_inputs_available?
+  (File.exist?(LOCAL_CPP) || File.exist?(GENERATED_CPP)) && File.exist?(GENERATED_EVENT_PAYLOADS)
+end
+
+def generator_env
+  scope = ENV.fetch('QT_RUBY_SCOPE', nil)
+  scope && !scope.empty? ? { 'QT_RUBY_SCOPE' => scope } : {}
+end
+
+def ensure_generated_bridge_inputs!
+  return false if generated_bridge_inputs_available?
+
+  abort "Generator script not found: #{GENERATOR}" unless File.exist?(GENERATOR)
+  abort 'Failed to generate Qt bridge files.' unless system(generator_env, RbConfig.ruby, GENERATOR)
+
+  true
+end
+
 abort 'pkg-config is required to build qt-ruby bridge.' unless find_executable(PKG_CONFIG)
 
-generator = File.expand_path('../../scripts/generate_bridge.rb', __dir__)
-abort "Generator script not found: #{generator}" unless File.exist?(generator)
-
-generator_env = {}
-scope = ENV.fetch('QT_RUBY_SCOPE', nil)
-generator_env['QT_RUBY_SCOPE'] = scope if scope && !scope.empty?
-abort 'Failed to generate Qt bridge files.' unless system(generator_env, RbConfig.ruby, generator)
+generated_by_extconf = ensure_generated_bridge_inputs!
 
 missing = QT_PACKAGES.reject { |pkg| pkg_config('--exists', pkg) }
 abort "Missing Qt packages: #{missing.join(', ')}" unless missing.empty?
@@ -34,10 +51,10 @@ abort "Qt version #{qt_version} is too old. Require >= #{MINIMUM_QT_VERSION}." i
 
 cflags = pkg_config_capture('--cflags', *QT_PACKAGES)
 libs = pkg_config_capture('--libs', *QT_PACKAGES)
-generated_cpp = if File.exist?('qt_ruby_bridge.cpp')
-                  File.expand_path('qt_ruby_bridge.cpp')
+generated_cpp = if !generated_by_extconf && File.exist?(LOCAL_CPP)
+                  LOCAL_CPP
                 else
-                  File.expand_path('../../build/generated/qt_ruby_bridge.cpp', __dir__)
+                  GENERATED_CPP
                 end
 runtime_hpp = File.expand_path('../../ext/qt_ruby_bridge/qt_ruby_runtime.hpp', __dir__)
 runtime_cpp_files = %w[
@@ -52,8 +69,7 @@ abort "Runtime header not found: #{runtime_hpp}" unless File.exist?(runtime_hpp)
 missing_runtime = runtime_cpp_files.reject { |path| File.exist?(path) }
 abort "Runtime source not found: #{missing_runtime.join(', ')}" unless missing_runtime.empty?
 
-local_cpp = File.expand_path('qt_ruby_bridge.cpp')
-FileUtils.cp(generated_cpp, local_cpp) unless File.exist?(local_cpp) && File.identical?(generated_cpp, local_cpp)
+FileUtils.cp(generated_cpp, LOCAL_CPP) unless File.exist?(LOCAL_CPP) && File.identical?(generated_cpp, LOCAL_CPP)
 runtime_cpp_files.each do |runtime_cpp|
   local_runtime_cpp = File.expand_path(File.basename(runtime_cpp))
   unless File.exist?(local_runtime_cpp) && File.identical?(runtime_cpp, local_runtime_cpp)
