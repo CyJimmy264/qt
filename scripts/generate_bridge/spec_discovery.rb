@@ -151,6 +151,90 @@ def discover_related_value_classes(ast, seed_classes, all_classes, template_clas
   discovered.to_a
 end
 
+def discover_related_qobject_wrapper_classes(ast, seed_classes, all_classes, template_classes, scope)
+  discovered = seed_classes.to_set
+  queue = seed_classes.dup
+  related = []
+
+  until queue.empty?
+    klass = queue.shift
+    related_qobject_pointer_type_names(ast, klass).each do |candidate|
+      next if discovered.include?(candidate)
+      next unless related_qobject_wrapper_candidate?(ast, candidate, all_classes, template_classes, scope)
+
+      discovered << candidate
+      related << candidate
+      queue << candidate
+    end
+  end
+
+  related
+end
+
+def related_qobject_wrapper_candidate?(ast, qt_class, all_classes, template_classes, scope)
+  return false unless all_classes.include?(qt_class)
+  return false if template_classes.include?(qt_class)
+  return false if qt_class.end_with?('Private')
+  return false if qt_class == 'QApplication'
+  return false unless class_inherits?(ast, qt_class, 'QObject')
+
+  related_qobject_wrapper_matches_scope?(ast, qt_class, scope)
+end
+
+def related_qobject_wrapper_matches_scope?(ast, qt_class, scope)
+  case scope
+  when 'widgets'
+    class_inherits?(ast, qt_class, 'QWidget') || class_inherits?(ast, qt_class, 'QLayout')
+  when 'qobject'
+    !class_inherits?(ast, qt_class, 'QWidget') && !class_inherits?(ast, qt_class, 'QLayout')
+  when 'all'
+    true
+  else
+    raise "Unsupported QT_RUBY_SCOPE=#{scope.inspect}. Supported: #{SUPPORTED_SCOPES.join(', ')}"
+  end
+end
+
+def related_qobject_pointer_type_names(ast, qt_class)
+  int_cast_types = ast_int_cast_type_set(ast)
+  method_decls_for_related_wrapper_scan(ast, qt_class).each_with_object(Set.new) do |decl, out|
+    next unless auto_method_decl_candidate?(decl)
+    next unless auto_method_supported_for_related_wrapper_scan?(ast, decl, qt_class, int_cast_types)
+
+    parsed = parse_method_signature(decl)
+    append_qobject_pointer_types_from_decl(out, parsed)
+  end
+end
+
+def method_decls_for_related_wrapper_scan(ast, qt_class)
+  collect_method_names_with_bases(ast, qt_class).flat_map do |method_name|
+    collect_method_decls_with_bases(ast, qt_class, method_name)
+  end
+end
+
+def auto_method_supported_for_related_wrapper_scan?(ast, decl, qt_class, int_cast_types)
+  entry = { qt_name: decl['name'] }
+  !build_auto_method_from_decl(decl, entry, qt_class: qt_class, int_cast_types: int_cast_types, ast: ast).nil?
+end
+
+def append_qobject_pointer_types_from_decl(out, parsed)
+  pointer_type = qobject_pointer_type_name(parsed[:return_type])
+  out << pointer_type if pointer_type
+  parsed[:params].each do |param|
+    pointer_type = qobject_pointer_type_name(param[:type])
+    out << pointer_type if pointer_type
+  end
+end
+
+def qobject_pointer_type_name(raw_type)
+  normalized = normalized_cpp_type_name(raw_type).to_s
+  return nil unless normalized.end_with?('*')
+
+  type_name = normalized.delete_suffix('*')
+  return nil unless type_name.match?(/\AQ[A-Z]\w*\z/)
+
+  type_name
+end
+
 def related_value_class_candidate?(ast, qt_class, all_classes, template_classes)
   return false if SCALAR_BRIDGED_QT_TYPES.include?(qt_class)
   return false unless all_classes.include?(qt_class)
@@ -215,9 +299,13 @@ def discover_target_qt_classes(ast, scope)
   targets = timed("discover_target_qt_classes/#{scope}/related") do
     discover_related_value_classes(ast, base_targets, all_classes, template_classes).sort
   end
+  wrapper_targets = timed("discover_target_qt_classes/#{scope}/related_qobject_wrappers") do
+    discover_related_qobject_wrapper_classes(ast, targets, all_classes, template_classes, scope).sort
+  end
+  targets = (targets + wrapper_targets).uniq.sort
   debug_log(
     "discover_target_qt_classes scope=#{scope} total_q=#{all_classes.length} " \
-    "base=#{base_targets.length} targets=#{targets.length}"
+    "base=#{base_targets.length} wrappers=#{wrapper_targets.length} targets=#{targets.length}"
   )
   targets
 end
@@ -264,7 +352,7 @@ def constructor_usable_for_codegen?(ast, qt_class)
   ctor_decls = collect_constructor_decls(ast, qt_class)
   ctor_decls.any? do |decl|
     constructor_keysequence_parent_type(decl) ||
-    constructor_supports_parent_only?(decl) ||
+      constructor_supports_parent_only?(decl) ||
       constructor_supports_no_args?(decl) ||
       constructor_supports_string_path?(decl)
   end
@@ -272,28 +360,40 @@ end
 
 def build_base_spec_for_qt_class(ast, qt_class)
   ctor_decls = collect_constructor_decls(ast, qt_class)
+  parent_ctor = if abstract_class?(ast, qt_class)
+                  { parent: false, mode: :wrap_only }
+                else
+                  constructor_spec_for_qt_class(ast, qt_class, ctor_decls)
+                end
+  base_spec_hash(qt_class, parent_ctor)
+end
+
+def constructor_spec_for_qt_class(ast, qt_class, ctor_decls)
   keysequence_parent_type = ctor_decls.filter_map { |decl| constructor_keysequence_parent_type(decl) }.first
   parent_type = ctor_decls.filter_map { |decl| parent_constructor_first_type(decl) }.first
-  string_path_cast = ctor_decls.filter_map do |decl|
+  string_path_cast = constructor_string_path_cast(ctor_decls)
+  widget_child = qt_class != 'QWidget' && class_inherits?(ast, qt_class, 'QWidget')
+
+  if keysequence_parent_type
+    { parent: true, parent_type: keysequence_parent_type, mode: :keysequence_parent, register_in_parent: widget_child }
+  elsif parent_type
+    parent_constructor_for_type(parent_type, widget_child)
+  elsif string_path_cast
+    string_path_constructor(string_path_cast)
+  elsif ctor_decls.any? { |decl| constructor_supports_no_args?(decl) }
+    { parent: false }
+  else
+    { parent: false, mode: :wrap_only }
+  end
+end
+
+def constructor_string_path_cast(ctor_decls)
+  ctor_decls.filter_map do |decl|
     parsed = parse_method_signature(decl)
     next nil unless parsed && parsed[:params].first
 
     constructor_string_like_arg_cast(parsed[:params].first[:type])
   end.first
-  widget_child = qt_class != 'QWidget' && class_inherits?(ast, qt_class, 'QWidget')
-  parent_ctor =
-    if keysequence_parent_type
-      { parent: true, parent_type: keysequence_parent_type, mode: :keysequence_parent, register_in_parent: widget_child }
-    elsif parent_type
-      parent_constructor_for_type(parent_type, widget_child)
-    elsif string_path_cast
-      string_path_constructor(string_path_cast)
-    elsif ctor_decls.any? { |decl| constructor_supports_no_args?(decl) }
-      { parent: false }
-    else
-      { parent: false, mode: :wrap_only }
-    end
-  base_spec_hash(qt_class, parent_ctor)
 end
 
 def base_spec_hash(qt_class, parent_ctor)

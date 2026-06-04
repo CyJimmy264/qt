@@ -109,6 +109,10 @@ def ctor_function_name(spec)
   "qt_ruby_#{spec[:prefix]}_new"
 end
 
-def method_function_name(spec, method)
+def default_method_function_name(spec, method)
   "qt_ruby_#{spec[:prefix]}_#{to_snake(method[:qt_name])}"
+end
+
+def method_function_name(spec, method)
+  method[:native_name] || default_method_function_name(spec, method)
 end

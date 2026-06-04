@@ -920,11 +920,48 @@ end
 def append_ruby_widget_methods(lines, spec)
   spec[:methods].each do |method|
     call_args = ['@handle'] + method[:args].map { |arg| arg[:name] }
-    native_call = "Native.#{spec[:prefix]}_#{to_snake(method[:qt_name])}(#{call_args.join(', ')})"
+    native_name = method_function_name(spec, method).delete_prefix('qt_ruby_')
+    native_call = "Native.#{native_name}(#{call_args.join(', ')})"
     append_ruby_native_call_method(lines, method: method, native_call: native_call, indent: '    ')
     append_ruby_property_writer(lines, method: method, indent: '    ')
     lines << ''
   end
+end
+
+def assign_unique_native_method_names(specs)
+  used = Set.new
+  specs.map do |spec|
+    methods = spec[:methods].map do |method|
+      assign_unique_native_method_name(spec, method, used)
+    end
+    spec.merge(methods: methods)
+  end
+end
+
+def assign_unique_native_method_name(spec, method, used)
+  native_name = default_method_function_name(spec, method)
+  return used_add_and_return(used, native_name, method) unless used.include?(native_name)
+
+  unique_name = next_unique_native_method_name(spec, method, used)
+  debug_log("native name collision #{native_name} -> #{unique_name}")
+  used << unique_name
+  method.merge(native_name: unique_name)
+end
+
+def used_add_and_return(used, value, result)
+  used << value
+  result
+end
+
+def next_unique_native_method_name(spec, method, used)
+  base = "qt_ruby_#{spec[:prefix]}_qt_#{to_snake(method[:qt_name])}"
+  candidate = base
+  counter = 2
+  while used.include?(candidate)
+    candidate = "#{base}_#{counter}"
+    counter += 1
+  end
+  candidate
 end
 
 def generate_ruby_widget_class(lines, spec, specs_by_qt, super_qt_by_qt, qt_to_ruby)
@@ -1202,7 +1239,8 @@ free_function_specs = timed('build_free_function_specs') { qt_free_function_spec
 base_specs = timed('build_base_specs') { build_base_specs(ast) }
 timed('validate_qt_api') { validate_qt_api!(ast, base_specs) }
 expanded_specs = timed('expand_auto_methods') { expand_auto_methods(base_specs, ast) }
-effective_specs = timed('enrich_specs_with_properties') { enrich_specs_with_properties(expanded_specs, ast) }
+property_specs = timed('enrich_specs_with_properties') { enrich_specs_with_properties(expanded_specs, ast) }
+effective_specs = timed('assign_unique_native_method_names') { assign_unique_native_method_names(property_specs) }
 super_qt_by_qt, wrapper_qt_classes = timed('build_generated_inheritance') do
   build_generated_inheritance(ast, effective_specs)
 end

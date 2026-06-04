@@ -205,6 +205,29 @@ class QtBindingsTest < Minitest::Test
     end
   end
 
+  def test_qheaderview_section_order_api_is_generated
+    assert Qt.const_defined?(:QHeaderView, false)
+
+    expected_methods = %i[
+      setSectionsMovable set_sections_movable sectionsMovable sections_movable sectionsMovable=
+      sections_movable= visualIndex visual_index logicalIndex logical_index moveSection move_section
+    ]
+
+    assert_empty expected_methods - QHeaderView::QT_API_RUBY_METHODS
+  end
+
+  def test_qheaderview_section_order_methods_roundtrip
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      header = qheaderview_section_order_header
+
+      assert_kind_of QHeaderView, header
+
+      assert_qheaderview_move_section_roundtrip(header)
+    end
+  end
+
   def test_qobject_children_returns_canonical_wrappers_from_qt
     skip 'native bridge is not available' unless Qt::Native.available?
 
@@ -646,6 +669,37 @@ class QtBindingsTest < Minitest::Test
     layout.remove_widget(button)
     button.hide
     label.set_style_sheet('background-color: #fafafa;')
+  end
+
+  def qheaderview_section_order_header
+    table = QTableWidget.new
+    table.column_count = 3
+    table.horizontal_header
+  end
+
+  def assert_qheaderview_move_section_roundtrip(header)
+    header.sections_movable = true
+
+    assert header.sections_movable
+    assert_equal [0, 1, 2], header_logical_order(header, 3)
+
+    move_header_section(header, 0, 2)
+
+    assert_equal [1, 2, 0], header_logical_order(header, 3)
+    assert_equal [2, 0, 1], Array.new(3) { |logical_index| header.visual_index(logical_index) }
+
+    move_header_section(header, 2, 0)
+
+    assert_equal [0, 1, 2], header_logical_order(header, 3)
+  end
+
+  def move_header_section(header, from, to)
+    header.move_section(from, to)
+    QApplication.process_events
+  end
+
+  def header_logical_order(header, count)
+    Array.new(count) { |visual_index| header.logical_index(visual_index) }
   end
 
   def with_qapplication
