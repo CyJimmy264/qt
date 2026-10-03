@@ -300,7 +300,8 @@ def discover_target_qt_classes(ast, scope)
     discover_related_value_classes(ast, base_targets, all_classes, template_classes).sort
   end
   wrapper_targets = timed("discover_target_qt_classes/#{scope}/related_qobject_wrappers") do
-    discover_related_qobject_wrapper_classes(ast, targets, all_classes, template_classes, scope).sort
+    seed_classes = (targets + ['QApplication']).uniq
+    discover_related_qobject_wrapper_classes(ast, seed_classes, all_classes, template_classes, scope).sort
   end
   targets = (targets + wrapper_targets).uniq.sort
   debug_log(

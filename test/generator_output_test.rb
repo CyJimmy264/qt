@@ -13,6 +13,14 @@ class QtGeneratorOutputTest < Minitest::Test
     assert_empty duplicates.sort
   end
 
+  def test_qapplication_related_clipboard_api_is_generated
+    clipboard_methods = Qt::QClipboard.instance_methods
+
+    assert_includes clipboard_methods, :text
+    assert_includes clipboard_methods, :setText
+    assert_includes clipboard_methods, :set_text
+  end
+
   private
 
   def generated_native_symbols
