@@ -19,6 +19,7 @@ namespace QtRubyRuntime {
 constexpr int kEventCallbackIgnore = 0;
 constexpr int kEventCallbackContinue = 1;
 constexpr int kEventCallbackConsume = 2;
+constexpr int kEventCallbackReject = 3;
 
 EventCallback& event_callback_ref() {
   static EventCallback callback = nullptr;
@@ -234,6 +235,10 @@ class EventFilter : public QObject {
       event->accept();
       return true;
     }
+    if (callback_result == kEventCallbackReject) {
+      event->ignore();
+      return true;
+    }
     return QObject::eventFilter(watched, event);
   }
 };
@@ -244,10 +249,10 @@ EventFilter* event_filter_instance() {
 }
 
 void ensure_event_filter_installed() {
-  static bool installed = false;
-  if (!installed && qApp) {
+  static QApplication* installed_on = nullptr;
+  if (qApp && installed_on != qApp) {
     qApp->installEventFilter(event_filter_instance());
-    installed = true;
+    installed_on = qApp;
   }
 }
 

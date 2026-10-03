@@ -7,6 +7,7 @@ module Qt
     EVENT_RESULT_IGNORE = 0
     EVENT_RESULT_CONTINUE = 1
     EVENT_RESULT_CONSUME = 2
+    EVENT_RESULT_REJECT = 3
 
     module_function
 
@@ -20,6 +21,7 @@ module Qt
       return EVENT_RESULT_CONTINUE unless handlers && !handlers.empty?
 
       results = handlers.map { |handler| handler.call(payload) }
+      return EVENT_RESULT_REJECT if results.include?(:reject)
       return EVENT_RESULT_CONSUME if results.any? { |result| result == true || result == :consume }
       return EVENT_RESULT_IGNORE if results.any? { |result| result == false || result == :ignore }
 

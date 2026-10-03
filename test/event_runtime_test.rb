@@ -235,6 +235,36 @@ class QtEventRuntimeDeliveryTest < Minitest::Test
     assert_equal Qt::EventRuntimeDispatch::EVENT_RESULT_CONSUME, result
   end
 
+  def test_event_dispatch_return_value_symbol_reject_marks_event_rejected
+    ptr = FFI::Pointer.new(0x1234)
+    handlers = { ptr.address => { Qt::EventClose => [->(_payload) { :reject }] } }
+
+    result = Qt::EventRuntimeDispatch.dispatch_event(handlers, ptr, Qt::EventClose, { type: Qt::EventClose })
+
+    assert_equal Qt::EventRuntimeDispatch::EVENT_RESULT_REJECT, result
+  end
+
+  def test_close_event_can_be_rejected_before_widget_close_handler
+    skip 'native bridge is not available' unless Qt::Native.available?
+
+    with_qapplication do
+      window = QWidget.new
+      close_events = []
+      window.on(:close) do |event|
+        close_events << event
+        :reject
+      end
+      window.show
+      app = QApplication.current
+      app&.process_events
+
+      window.close
+
+      refute_empty close_events
+      assert window.is_visible
+    end
+  end
+
   def test_resize_event_end_to_end
     skip 'native bridge is not available' unless Qt::Native.available?
 
