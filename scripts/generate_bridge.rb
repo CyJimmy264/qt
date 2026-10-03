@@ -1173,6 +1173,7 @@ def collect_qt_scoped_enum_constants(ast, warnings = [])
     next unless owner.match?(/\AQ[A-Z]\w*\z/)
     next if owner == 'Qt' || owner == 'QEvent'
 
+    next_value = 0
     Array(node['inner']).each do |entry|
       next unless entry['kind'] == 'EnumConstantDecl'
 
@@ -1181,7 +1182,13 @@ def collect_qt_scoped_enum_constants(ast, warnings = [])
 
       raw_value = ast_extract_first_value(entry)
       value = parse_ast_integer_value(raw_value)
-      next if value.nil?
+      value = next_value if value.nil? && !next_value.nil?
+      if value.nil?
+        next_value = nil
+        next
+      end
+
+      next_value = value + 1
 
       append_constant_with_conflict_warning(
         constants_by_owner[owner],
