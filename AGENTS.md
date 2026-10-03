@@ -18,10 +18,12 @@
   - `scripts/generate_bridge.rb` (AST-driven generator + universal policy)
 - `lib/qt/native.rb` must remain a thin FFI wrapper over generated bridge API.
 - Build flow:
-  - `ruby scripts/generate_bridge.rb`
-  - `bundle exec rake compile`
-  - Verification flow is strictly sequential: never run `compile` and `test` in parallel.
-  - Always run `bundle exec rake compile` first, then `bundle exec rake test`.
+- `ruby scripts/generate_bridge.rb`
+- `bundle exec rake compile`
+- Verification flow is strictly sequential: never run `compile` and `test` in parallel.
+- Always run `bundle exec rake compile` first, then `bundle exec rake test`.
+- If the sandbox blocks compiler, Bundler, or test-tool cache writes outside the workspace, rerun the unchanged command with `require_escalated`; do not disable or redirect the cache as a workaround.
+- Run Qt GUI tests under `xvfb-run -a` when no isolated display is otherwise available.
 
 ## Universal Generation Contract
 - Target direction: universal AST-driven policy, not per-class manual method curation.
