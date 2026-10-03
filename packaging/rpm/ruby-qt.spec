@@ -1,5 +1,5 @@
 Name:           ruby-qt
-Version:        0.1.8
+Version:        0.2.0
 Release:        1%{?dist}
 Summary:        Ruby bindings for Qt 6 with generated native bridge
 

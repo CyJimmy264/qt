@@ -6,6 +6,21 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-03
+
+### Added
+
+- Generate implicit values for scoped Qt enums, exposing names such as `QTextEdit::NoWrap` and `QTextCursor::Right`.
+- Discover QObject wrappers returned by `QApplication`, including `QClipboard`, and expose their public API.
+- Support copied Qt value classes through managed Ruby wrappers, including `QTextEdit#textCursor` and `#setTextCursor`.
+- Marshal `QList<int>` parameters and results through the QVariant bridge, enabling `QSplitter#sizes` and `#setSizes`.
+- Add the `:reject` event result to ignore and stop native Qt event handling, including close-event vetoes.
+
+### Fixed
+
+- Reinstall the Qt event filter when the runtime creates a new `QApplication` instance.
+- Preserve established overload choices while adding support for Qt value-class parameters.
+
 ## [0.1.9] - 2026-06-04
 
 ### Added
