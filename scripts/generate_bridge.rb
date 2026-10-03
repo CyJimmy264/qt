@@ -250,6 +250,7 @@ def arg_expr(arg)
   when :qicon_ref then "*static_cast<QIcon*>(#{arg[:name]})"
   when :qany_string_view then "QAnyStringView(as_qstring(#{arg[:name]}))"
   when :qvariant_from_utf8 then "qvariant_from_bridge_value(#{arg[:name]})"
+  when :qint_list_from_variant then "QtRubyRuntime::qint_list_from_variant(qvariant_from_bridge_value(#{arg[:name]}))"
   when :alignment then "static_cast<Qt::Alignment>(#{arg[:name]})"
   when :qt_value_ref then "*static_cast<#{arg[:value_class]}*>(#{arg[:name]})"
   when String then "static_cast<#{arg[:cast]}>(#{arg[:name]})"
@@ -651,6 +652,7 @@ def optional_arg_replacement(arg, safe)
   when :bool then "(#{safe}.nil? ? false : #{safe})"
   when :pointer then safe
   when :string
+    return "(#{safe}.nil? ? Qt::VariantCodec.encode([]) : Qt::VariantCodec.encode(#{safe}))" if arg[:cast] == :qint_list_from_variant
     return "(#{safe}.nil? ? '' : Qt::VariantCodec.encode(#{safe}))" if arg[:cast] == :qvariant_from_utf8
     return "(#{safe}.nil? ? '' : Qt::DateTimeCodec.encode_qdatetime(#{safe}))" if arg[:cast] == :qdatetime_from_utf8
     return "(#{safe}.nil? ? '' : Qt::DateTimeCodec.encode_qdate(#{safe}))" if arg[:cast] == :qdate_from_utf8
@@ -670,6 +672,7 @@ def ruby_arg_call_value(arg, safe, optional:)
 
   return "Qt::StringCodec.to_qt_text(#{safe})" if text_bridge_arg?(arg) && !optional
   return "Qt::VariantCodec.encode(#{safe})" if arg[:cast] == :qvariant_from_utf8 && !optional
+  return "Qt::VariantCodec.encode(#{safe})" if arg[:cast] == :qint_list_from_variant && !optional
   return "Qt::DateTimeCodec.encode_qdatetime(#{safe})" if arg[:cast] == :qdatetime_from_utf8 && !optional
   return "Qt::DateTimeCodec.encode_qdate(#{safe})" if arg[:cast] == :qdate_from_utf8 && !optional
   return "Qt::DateTimeCodec.encode_qtime(#{safe})" if arg[:cast] == :qtime_from_utf8 && !optional
@@ -713,6 +716,7 @@ def ruby_native_method_body(method, rewritten_native_call)
     return "Qt::ObjectListCodec.decode(#{rewritten_native_call}, '#{method[:object_list_class]}')"
   end
   return "Qt::VariantCodec.decode(#{rewritten_native_call})" if method[:return_cast] == :qvariant_to_utf8
+  return "Qt::VariantCodec.decode(#{rewritten_native_call})" if method[:return_cast] == :qint_list_to_variant
   return "Qt::DateTimeCodec.decode_qdatetime(#{rewritten_native_call})" if method[:return_cast] == :qdatetime_to_utf8
   return "Qt::DateTimeCodec.decode_qdate(#{rewritten_native_call})" if method[:return_cast] == :qdate_to_utf8
   return "Qt::DateTimeCodec.decode_qtime(#{rewritten_native_call})" if method[:return_cast] == :qtime_to_utf8
@@ -918,6 +922,7 @@ def qapplication_class_method_body(method, native_call)
   return "        Qt::DateTimeCodec.decode_qdatetime(#{native_call})" if method[:return_cast] == :qdatetime_to_utf8
   return "        Qt::DateTimeCodec.decode_qdate(#{native_call})" if method[:return_cast] == :qdate_to_utf8
   return "        Qt::DateTimeCodec.decode_qtime(#{native_call})" if method[:return_cast] == :qtime_to_utf8
+  return "        Qt::VariantCodec.decode(#{native_call})" if method[:return_cast] == :qint_list_to_variant
   if method[:return_cast] == :qt_value_copy
     delete_method = qt_value_delete_function_name(method[:value_class])
     return "        Qt::ValueWrapper.wrap(#{native_call}, '#{method[:value_class]}', :#{delete_method})"

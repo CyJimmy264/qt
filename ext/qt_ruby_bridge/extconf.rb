@@ -60,6 +60,7 @@ runtime_hpp = File.expand_path('../../ext/qt_ruby_bridge/qt_ruby_runtime.hpp', _
 runtime_cpp_files = %w[
   runtime_events.cpp
   runtime_signals.cpp
+  runtime_value_types.cpp
 ].map { |name| File.expand_path("../../ext/qt_ruby_bridge/#{name}", __dir__) }
 
 unless File.exist?(generated_cpp)

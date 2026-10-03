@@ -11,6 +11,7 @@ class CppMethodReturnEmitter
   def emit
     return emit_void if method[:ffi_return] == :void
     return emit_qt_value_copy if method[:return_cast] == :qt_value_copy
+    return emit_qint_list if method[:return_cast] == :qint_list_to_variant
     return emit_qstring if qstring_return?
     return emit_qobject_list if qobject_list_return?
     return emit_qdatetime if qdatetime_return?
@@ -114,6 +115,17 @@ class CppMethodReturnEmitter
 
   def emit_qt_value_copy
     lines << "  return new #{method[:value_class]}(#{invocation});"
+  end
+
+  def emit_qint_list
+    result = unique_local_name('result')
+    variant = unique_local_name('variant')
+    utf8 = unique_local_name('utf8')
+    lines << "  const QList<int> #{result} = #{invocation};"
+    lines << "  const QVariant #{variant} = QtRubyRuntime::qvariant_from_qint_list(#{result});"
+    lines << "  thread_local QByteArray #{utf8};"
+    lines << "  #{utf8} = qvariant_to_bridge_string(#{variant}).toUtf8();"
+    lines << "  return #{utf8}.constData();"
   end
 
   def emit_value

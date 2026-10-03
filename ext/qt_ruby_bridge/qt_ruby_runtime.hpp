@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QApplication>
+#include <QList>
+#include <QVariant>
 
 namespace QtRubyRuntime {
 using EventCallback = int (*)(void*, int, const char*);
@@ -12,6 +14,10 @@ QApplication* qapplication_new(const char* argv0);
 // Performs guarded QApplication teardown.
 // Returns false when teardown is rejected by runtime safety checks.
 bool qapplication_delete(void* app_handle);
+
+// FFI-safe conversion for public Qt QList<int> API parameters and results.
+QList<int> qint_list_from_variant(const QVariant& value);
+QVariant qvariant_from_qint_list(const QList<int>& value);
 
 void set_event_callback(void* callback_ptr);
 void watch_qobject_event(void* object_handle, int event_type);

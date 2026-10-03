@@ -39,6 +39,28 @@ class QtGeneratorOutputTest < Minitest::Test
     app&.dispose
   end
 
+  def test_qsplitter_sizes_are_exposed_as_ruby_integer_arrays
+    assert_includes Qt::QSplitter.instance_methods, :sizes
+    assert_includes Qt::QSplitter.instance_methods, :set_sizes
+
+    app = QApplication.new(0, [])
+    splitter = QSplitter.new
+    splitter.add_widget(QWidget.new)
+    splitter.add_widget(QWidget.new)
+    splitter.resize(200, 100)
+    splitter.show
+    app.process_events
+    splitter.set_sizes([70, 30])
+    app.process_events
+
+    sizes = splitter.sizes
+    assert_equal 2, sizes.length
+    assert sizes.all? { |size| size.is_a?(Integer) }
+    assert_operator sizes.first, :>, sizes.last
+  ensure
+    app&.dispose
+  end
+
   private
 
   def generated_native_symbols

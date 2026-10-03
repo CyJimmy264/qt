@@ -46,6 +46,7 @@ def map_cpp_arg_type(type_name, qt_class: nil, int_cast_types: nil, ast: nil)
 
   type = raw
   type = type.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
+  return { ffi: :string, cast: :qint_list_from_variant } if type == 'QList<int>'
   return { ffi: :string, cast: :qstring } if type == 'QString'
   return { ffi: :string, cast: :qdatetime_from_utf8 } if type == 'QDateTime'
   return { ffi: :string, cast: :qdate_from_utf8 } if type == 'QDate'
@@ -75,10 +76,11 @@ end
 
 def map_cpp_return_type(type_name, ast: nil)
   raw = type_name.to_s.strip
+  type = raw.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
+  return { ffi_return: :string, return_cast: :qint_list_to_variant } if type == 'QList<int>'
   return nil if unsupported_cpp_type?(raw)
   return nil if raw.start_with?('const ') && raw.end_with?('*')
 
-  type = raw.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
   map_scalar_cpp_return_type(type) || map_pointer_cpp_return_type(type, ast: ast) || map_qt_value_return_type(type, ast: ast)
 end
 
