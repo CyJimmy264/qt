@@ -15,7 +15,23 @@ def all_ffi_functions(specs, free_function_specs:)
     append_method_ffi_functions(fns, spec)
   end
 
+  value_wrapper_classes(specs, free_function_specs: free_function_specs).each do |qt_class|
+    fns << { name: qt_value_delete_function_name(qt_class), ffi_return: :void, args: [:pointer] }
+  end
+
   fns
+end
+
+def value_wrapper_classes(specs, free_function_specs: [])
+  spec_classes = specs.flat_map do |spec|
+    spec[:methods].filter_map { |method| method[:value_class] if method[:return_cast] == :qt_value_copy }
+  end
+  free_classes = free_function_specs.filter_map { |spec| spec[:value_class] }
+  (spec_classes + free_classes).uniq.sort
+end
+
+def qt_value_delete_function_name(qt_class)
+  "qt_ruby_#{to_snake(qt_class)}_value_delete"
 end
 
 def append_constructor_ffi_function(fns, spec)

@@ -38,7 +38,7 @@ def map_cpp_intlike_arg_type(type_name, qt_class, int_cast_types)
   map_qualified_intlike_arg_type(type_name, qt_class, int_cast_types)
 end
 
-def map_cpp_arg_type(type_name, qt_class: nil, int_cast_types: nil)
+def map_cpp_arg_type(type_name, qt_class: nil, int_cast_types: nil, ast: nil)
   raw = type_name.to_s.strip
   return nil if raw.end_with?('&') && !raw.start_with?('const ')
 
@@ -46,7 +46,6 @@ def map_cpp_arg_type(type_name, qt_class: nil, int_cast_types: nil)
 
   type = raw
   type = type.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
-  return nil if unsupported_cpp_type?(type)
   return { ffi: :string, cast: :qstring } if type == 'QString'
   return { ffi: :string, cast: :qdatetime_from_utf8 } if type == 'QDateTime'
   return { ffi: :string, cast: :qdate_from_utf8 } if type == 'QDate'
@@ -57,6 +56,12 @@ def map_cpp_arg_type(type_name, qt_class: nil, int_cast_types: nil)
   return { ffi: :string, cast: :qany_string_view } if type == 'QAnyStringView'
   return { ffi: :string, cast: :qvariant_from_utf8 } if type == 'QVariant'
   return { ffi: :string } if compact_raw.match?(/\Aconst\s+char\s*\*\z/)
+
+  if ast_qt_value_class?(ast, type)
+    return { ffi: :pointer, cast: :qt_value_ref, value_class: type }
+  end
+
+  return nil if unsupported_cpp_type?(type)
 
   map_cpp_pointer_arg_type(type, qt_class) || map_cpp_intlike_arg_type(type, qt_class, int_cast_types)
 end
@@ -74,7 +79,20 @@ def map_cpp_return_type(type_name, ast: nil)
   return nil if raw.start_with?('const ') && raw.end_with?('*')
 
   type = raw.sub(/\Aconst\s+/, '').sub(/\s*&\z/, '').strip
-  map_scalar_cpp_return_type(type) || map_pointer_cpp_return_type(type, ast: ast)
+  map_scalar_cpp_return_type(type) || map_pointer_cpp_return_type(type, ast: ast) || map_qt_value_return_type(type, ast: ast)
+end
+
+def ast_qt_value_class?(ast, type)
+  return false unless ast && type.match?(/\AQ[A-Z]\w*\z/)
+  return false unless ast_class_index(ast)[:methods_by_class].key?(type)
+
+  !class_inherits?(ast, type, 'QObject')
+end
+
+def map_qt_value_return_type(type, ast:)
+  return nil unless ast_qt_value_class?(ast, type)
+
+  { ffi_return: :pointer, return_cast: :qt_value_copy, value_class: type }
 end
 
 def map_scalar_cpp_return_type(type)
@@ -135,7 +153,7 @@ def parse_method_signature(method_decl)
   }
 end
 
-def build_auto_method_args(parsed, entry, qt_class, int_cast_types)
+def build_auto_method_args(parsed, entry, qt_class, int_cast_types, ast)
   arg_cast_overrides = Array(entry[:arg_casts])
   params = parsed[:params]
   required_arg_count = 0
@@ -143,7 +161,7 @@ def build_auto_method_args(parsed, entry, qt_class, int_cast_types)
 
   params.each_with_index do |param, idx|
     cast_override = arg_cast_overrides[idx]
-    arg_info = map_cpp_arg_type(param[:type], qt_class: qt_class, int_cast_types: int_cast_types)
+    arg_info = map_cpp_arg_type(param[:type], qt_class: qt_class, int_cast_types: int_cast_types, ast: ast)
     arg_info ||= { ffi: :int } if cast_override
     unless arg_info
       return nil unless skip_unsupported_optional_tail?(params, idx, param)
@@ -151,7 +169,12 @@ def build_auto_method_args(parsed, entry, qt_class, int_cast_types)
       break
     end
 
-    args << { name: param[:name], ffi: arg_info[:ffi], cast: cast_override || arg_info[:cast] }.compact
+    args << {
+      name: param[:name],
+      ffi: arg_info[:ffi],
+      cast: cast_override || arg_info[:cast],
+      value_class: arg_info[:value_class]
+    }.compact
     required_arg_count += 1 unless param[:has_default]
   end
 
@@ -174,6 +197,7 @@ def build_auto_method_hash(entry, ret_info, args, required_arg_count)
   }
   method[:return_cast] = ret_info[:return_cast] if ret_info[:return_cast]
   method[:pointer_class] = ret_info[:pointer_class] if ret_info[:pointer_class]
+  method[:value_class] = ret_info[:value_class] if ret_info[:value_class]
   method
 end
 
@@ -184,7 +208,7 @@ def build_auto_method_from_decl(method_decl, entry, qt_class:, int_cast_types:, 
   ret_info = map_cpp_return_type(parsed[:return_type], ast: ast)
   return nil unless ret_info
 
-  args, required_arg_count = build_auto_method_args(parsed, entry, qt_class, int_cast_types)
+  args, required_arg_count = build_auto_method_args(parsed, entry, qt_class, int_cast_types, ast)
   return nil unless args
 
   build_auto_method_hash(entry, ret_info, args, required_arg_count)
@@ -352,7 +376,11 @@ def resolve_auto_method(ast, qt_class, auto_entry)
   built = resolve_auto_method_built_candidates(ast, qt_class, entry)
   return per_ast_cache[cache_key] = nil unless built
 
-  per_ast_cache[cache_key] = built.min_by { |candidate| candidate[:method][:args].length }[:method]
+  per_ast_cache[cache_key] = built.min_by do |candidate|
+    method = candidate[:method]
+    value_arg_count = method[:args].count { |arg| arg[:cast] == :qt_value_ref }
+    [value_arg_count, method[:args].length]
+  end[:method]
 end
 
 def auto_entries_for_spec(spec, ast)

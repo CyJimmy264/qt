@@ -215,6 +215,8 @@ def build_qapplication_static_free_function_spec(ast, qt_name, int_cast_types)
   cpp_body =
     if candidate[:ffi_return] == :void
       ["QApplication::#{qt_name}();"]
+    elsif candidate[:return_cast] == :qt_value_copy
+      ["return new #{candidate[:value_class]}(QApplication::#{qt_name}());"]
     elsif candidate[:enum_cast]
       ["return static_cast<int>(QApplication::#{qt_name}());"]
     elsif candidate[:ffi_return] == :string
@@ -231,6 +233,7 @@ def build_qapplication_static_free_function_spec(ast, qt_name, int_cast_types)
   {
     name: "qt_ruby_#{native_name}",
     ffi_return: candidate[:ffi_return],
+    value_class: candidate[:value_class],
     args: [],
     cpp_return: ffi_return_to_cpp(candidate[:ffi_return]),
     cpp_args: '',
@@ -240,7 +243,8 @@ def build_qapplication_static_free_function_spec(ast, qt_name, int_cast_types)
       native: native_name,
       args: [],
       return_cast: candidate[:return_cast],
-      pointer_class: candidate[:pointer_class]
+      pointer_class: candidate[:pointer_class],
+      value_class: candidate[:value_class]
     }
   }
 end
@@ -271,6 +275,7 @@ def qapplication_static_return_info(return_type, int_cast_types, ast:)
       ffi_return: mapped[:ffi_return],
       return_cast: mapped[:return_cast],
       pointer_class: mapped[:pointer_class],
+      value_class: mapped[:value_class],
       enum_cast: false
     }
   end

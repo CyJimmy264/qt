@@ -10,6 +10,7 @@ class CppMethodReturnEmitter
 
   def emit
     return emit_void if method[:ffi_return] == :void
+    return emit_qt_value_copy if method[:return_cast] == :qt_value_copy
     return emit_qstring if qstring_return?
     return emit_qobject_list if qobject_list_return?
     return emit_qdatetime if qdatetime_return?
@@ -54,52 +55,75 @@ class CppMethodReturnEmitter
   end
 
   def emit_qstring
-    lines << "  const QString value = #{invocation};"
-    lines << '  thread_local QByteArray utf8;'
-    lines << '  utf8 = value.toUtf8();'
-    lines << '  return utf8.constData();'
+    result = unique_local_name('result')
+    utf8 = unique_local_name('utf8')
+    lines << "  const QString #{result} = #{invocation};"
+    lines << "  thread_local QByteArray #{utf8};"
+    lines << "  #{utf8} = #{result}.toUtf8();"
+    lines << "  return #{utf8}.constData();"
   end
 
   def emit_qvariant
-    lines << "  const QVariant value = #{invocation};"
-    lines << '  thread_local QByteArray utf8;'
-    lines << '  utf8 = qvariant_to_bridge_string(value).toUtf8();'
-    lines << '  return utf8.constData();'
+    result = unique_local_name('result')
+    utf8 = unique_local_name('utf8')
+    lines << "  const QVariant #{result} = #{invocation};"
+    lines << "  thread_local QByteArray #{utf8};"
+    lines << "  #{utf8} = qvariant_to_bridge_string(#{result}).toUtf8();"
+    lines << "  return #{utf8}.constData();"
   end
 
   def emit_qobject_list
-    lines << "  const QObjectList value = #{invocation};"
-    lines << '  thread_local QByteArray utf8;'
-    lines << '  utf8 = qobject_list_to_bridge_string(value).toUtf8();'
-    lines << '  return utf8.constData();'
+    result = unique_local_name('result')
+    utf8 = unique_local_name('utf8')
+    lines << "  const QObjectList #{result} = #{invocation};"
+    lines << "  thread_local QByteArray #{utf8};"
+    lines << "  #{utf8} = qobject_list_to_bridge_string(#{result}).toUtf8();"
+    lines << "  return #{utf8}.constData();"
   end
 
   def emit_qdatetime
-    lines << "  const QDateTime value = #{invocation};"
-    lines << '  thread_local QByteArray utf8;'
-    lines << '  utf8 = qdatetime_to_bridge_string(value).toUtf8();'
-    lines << '  return utf8.constData();'
+    result = unique_local_name('result')
+    utf8 = unique_local_name('utf8')
+    lines << "  const QDateTime #{result} = #{invocation};"
+    lines << "  thread_local QByteArray #{utf8};"
+    lines << "  #{utf8} = qdatetime_to_bridge_string(#{result}).toUtf8();"
+    lines << "  return #{utf8}.constData();"
   end
 
   def emit_qdate
-    lines << "  const QDate value = #{invocation};"
-    lines << '  thread_local QByteArray utf8;'
-    lines << '  utf8 = qdate_to_bridge_string(value).toUtf8();'
-    lines << '  return utf8.constData();'
+    result = unique_local_name('result')
+    utf8 = unique_local_name('utf8')
+    lines << "  const QDate #{result} = #{invocation};"
+    lines << "  thread_local QByteArray #{utf8};"
+    lines << "  #{utf8} = qdate_to_bridge_string(#{result}).toUtf8();"
+    lines << "  return #{utf8}.constData();"
   end
 
   def emit_qtime
-    lines << "  const QTime value = #{invocation};"
-    lines << '  thread_local QByteArray utf8;'
-    lines << '  utf8 = qtime_to_bridge_string(value).toUtf8();'
-    lines << '  return utf8.constData();'
+    result = unique_local_name('result')
+    utf8 = unique_local_name('utf8')
+    lines << "  const QTime #{result} = #{invocation};"
+    lines << "  thread_local QByteArray #{utf8};"
+    lines << "  #{utf8} = qtime_to_bridge_string(#{result}).toUtf8();"
+    lines << "  return #{utf8}.constData();"
   end
 
   def emit_pointer
     lines << "  return const_cast<void*>(static_cast<const void*>(#{invocation}));"
   end
 
+  def emit_qt_value_copy
+    lines << "  return new #{method[:value_class]}(#{invocation});"
+  end
+
   def emit_value
     lines << "  return #{invocation};"
+  end
+
+  def unique_local_name(suffix)
+    used = Array(method[:args]).map { |arg| arg[:name].to_s }.to_set
+    candidate = "qt_ruby_#{suffix}"
+    candidate += '_' while used.include?(candidate)
+    candidate
   end
 end

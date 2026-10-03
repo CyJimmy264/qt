@@ -251,6 +251,7 @@ def arg_expr(arg)
   when :qany_string_view then "QAnyStringView(as_qstring(#{arg[:name]}))"
   when :qvariant_from_utf8 then "qvariant_from_bridge_value(#{arg[:name]})"
   when :alignment then "static_cast<Qt::Alignment>(#{arg[:name]})"
+  when :qt_value_ref then "*static_cast<#{arg[:value_class]}*>(#{arg[:name]})"
   when String then "static_cast<#{arg[:cast]}>(#{arg[:name]})"
   else
     arg[:name]
@@ -335,6 +336,15 @@ def generate_cpp_delete(lines)
   lines << '}'
 end
 
+def generate_cpp_qt_value_deletes(lines, specs, free_function_specs)
+  value_wrapper_classes(specs, free_function_specs: free_function_specs).each do |qt_class|
+    lines << "extern \"C\" void #{qt_value_delete_function_name(qt_class)}(void* handle) {"
+    lines << "  delete static_cast<#{qt_class}*>(handle);"
+    lines << '}'
+    lines << ''
+  end
+end
+
 def cpp_method_signature(method)
   ['void* handle'] + method[:args].map { |arg| "#{ffi_to_cpp_type(arg[:ffi])} #{arg[:name]}" }
 end
@@ -381,6 +391,7 @@ def generate_cpp_bridge(specs, free_function_specs)
 
   specs.each { |spec| append_cpp_spec_methods(lines, spec) }
 
+  generate_cpp_qt_value_deletes(lines, specs, free_function_specs)
   generate_cpp_delete(lines)
   "#{lines.join("\n")}\n"
 end
@@ -653,6 +664,10 @@ def optional_arg_replacement(arg, safe)
 end
 
 def ruby_arg_call_value(arg, safe, optional:)
+  if arg[:cast] == :qt_value_ref
+    return optional ? "(#{safe}.nil? ? nil : #{safe}.handle)" : "#{safe}.handle"
+  end
+
   return "Qt::StringCodec.to_qt_text(#{safe})" if text_bridge_arg?(arg) && !optional
   return "Qt::VariantCodec.encode(#{safe})" if arg[:cast] == :qvariant_from_utf8 && !optional
   return "Qt::DateTimeCodec.encode_qdatetime(#{safe})" if arg[:cast] == :qdatetime_from_utf8 && !optional
@@ -701,6 +716,10 @@ def ruby_native_method_body(method, rewritten_native_call)
   return "Qt::DateTimeCodec.decode_qdatetime(#{rewritten_native_call})" if method[:return_cast] == :qdatetime_to_utf8
   return "Qt::DateTimeCodec.decode_qdate(#{rewritten_native_call})" if method[:return_cast] == :qdate_to_utf8
   return "Qt::DateTimeCodec.decode_qtime(#{rewritten_native_call})" if method[:return_cast] == :qtime_to_utf8
+  if method[:return_cast] == :qt_value_copy
+    delete_method = qt_value_delete_function_name(method[:value_class])
+    return "Qt::ValueWrapper.wrap(#{rewritten_native_call}, '#{method[:value_class]}', :#{delete_method})"
+  end
   return "Qt::ObjectWrapper.wrap(#{rewritten_native_call}, '#{method[:pointer_class]}')" if method[:pointer_class]
 
   rewritten_native_call
@@ -899,6 +918,10 @@ def qapplication_class_method_body(method, native_call)
   return "        Qt::DateTimeCodec.decode_qdatetime(#{native_call})" if method[:return_cast] == :qdatetime_to_utf8
   return "        Qt::DateTimeCodec.decode_qdate(#{native_call})" if method[:return_cast] == :qdate_to_utf8
   return "        Qt::DateTimeCodec.decode_qtime(#{native_call})" if method[:return_cast] == :qtime_to_utf8
+  if method[:return_cast] == :qt_value_copy
+    delete_method = qt_value_delete_function_name(method[:value_class])
+    return "        Qt::ValueWrapper.wrap(#{native_call}, '#{method[:value_class]}', :#{delete_method})"
+  end
   return "        Qt::ObjectWrapper.wrap(#{native_call}, '#{method[:pointer_class]}')" if method[:pointer_class]
 
   "        #{native_call}"
